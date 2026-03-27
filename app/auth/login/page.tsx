@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -20,12 +20,9 @@ import {
 	DialogTrigger,
 } from "@/components/ui/dialog";
 import useAuthStore from "@/shared/store/pages/auth/useAuthStore";
-import useAgency from "@/shared/store/useAgency";
 import { errorToast, successToast } from "@/shared/helper/toast";
-import ThemeSwitch from "@/shared/components/layout/theme/ThemeSwitch";
 import { ACCESS_TOKEN_KEY } from "@/lib/authTokens";
 import BrandSide from "@/shared/common/pages/auth/BrandSide";
-import GoogleSignInButton from "@/shared/components/auth/GoogleSignInButton";
 import { Switch } from "@/components/ui/switch";
 
 type LoginFormValues = {
@@ -49,14 +46,8 @@ const resetSchema = z.object({
 });
 
 const LoginPage = () => {
-	const {
-		login,
-		loginWithGoogle,
-		loadingLogin,
-		requestPasswordReset,
-		storeTokens,
-	} = useAuthStore();
-	const { getMyAgencyAccountData } = useAgency();
+	const { login, loadingLogin, requestPasswordReset, storeTokens } =
+		useAuthStore();
 	const router = useRouter();
 	const [isResetOpen, setIsResetOpen] = useState(false);
 
@@ -102,16 +93,7 @@ const LoginPage = () => {
 				? (Cookies.get(ACCESS_TOKEN_KEY) ?? null)
 				: null;
 		if (!token) return;
-		const checkStatus = async () => {
-			const account = await getMyAgencyAccountData(token);
-			if (account?.agencyId) {
-				router.push("/");
-			} else {
-				router.push("/auth/overview");
-			}
-		};
-		checkStatus();
-	}, [getMyAgencyAccountData, router]);
+	}, [router]);
 
 	const onSubmit = async ({ email, password, rememberMe }: LoginFormValues) => {
 		const result = await login(email, password, { storeTokens: false });
@@ -122,14 +104,7 @@ const LoginPage = () => {
 		} else {
 			localStorage.removeItem("remembered_email");
 		}
-
-		const account = await getMyAgencyAccountData(result.access_token);
 		storeTokens(result.access_token, result.refresh_token);
-		if (account?.agencyId) {
-			router.push("/");
-		} else {
-			router.push("/auth/overview");
-		}
 	};
 
 	const onResetSubmit = async ({ email }: ResetPasswordValues) => {
@@ -143,25 +118,6 @@ const LoginPage = () => {
 			errorToast("Failed to send reset OTP. Please try again.");
 		}
 	};
-
-	const handleGoogleSuccess = useCallback(
-		async (idToken: string) => {
-			const result = await loginWithGoogle(idToken, { storeTokens: false });
-			if (!result?.access_token) return;
-			storeTokens(result.access_token, result.refresh_token);
-			if (result.is_new_user) {
-				router.push("/auth/overview");
-				return;
-			}
-			const account = await getMyAgencyAccountData(result.access_token);
-			if (account?.agencyId) {
-				router.push("/");
-			} else {
-				router.push("/auth/overview");
-			}
-		},
-		[loginWithGoogle, getMyAgencyAccountData, storeTokens, router]
-	);
 
 	return (
 		<div className="light-neutral-scope">
@@ -178,15 +134,9 @@ const LoginPage = () => {
 								className="object-contain"
 							/>
 							<span className="font-bold text-base uppercase tracking-wide text-blue-700 dark:text-blue-300">
-								Plato Agency
+								Plato Admin Dashboard
 							</span>
 						</div>
-						<ThemeSwitch />
-					</div>
-
-					{/* Desktop theme switch - hidden on mobile */}
-					<div className="absolute right-6 top-6 hidden lg:block">
-						<ThemeSwitch />
 					</div>
 
 					{/* Form area */}
@@ -323,29 +273,6 @@ const LoginPage = () => {
 									{loadingLogin ? "Signing in..." : "Sign In"}
 								</Button>
 							</form>
-
-							<div className="mt-6 flex items-center gap-3 text-xs text-blue-500 dark:text-slate-400">
-								<span className="h-px flex-1 bg-blue-200 dark:bg-slate-700" />
-								OR CONTINUE WITH
-								<span className="h-px flex-1 bg-blue-200 dark:bg-slate-700" />
-							</div>
-
-							<GoogleSignInButton
-								clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID_AGENCY ?? ""}
-								onSuccess={handleGoogleSuccess}
-								onError={(msg) => errorToast(msg)}
-								className="mt-4 flex justify-center"
-							/>
-
-							<p className="mt-6 text-center text-sm text-blue-600 dark:text-slate-300">
-								Don&apos;t have an account?{" "}
-								<Link
-									href="/auth/signup"
-									className="text-main-LebaneseBlue hover:underline font-bold"
-								>
-									Sign up here
-								</Link>
-							</p>
 						</div>
 					</div>
 				</div>
