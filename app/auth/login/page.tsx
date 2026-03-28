@@ -1,13 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Lock, Mail } from "lucide-react";
-import Cookies from "js-cookie";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,8 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import useAuthStore from "@/shared/store/pages/auth/useAuthStore";
 import { errorToast, successToast } from "@/shared/helper/toast";
-import { ACCESS_TOKEN_KEY } from "@/lib/authTokens";
-import BrandSide from "@/shared/common/pages/auth/BrandSide";
+import BrandSide from "@/shared/components/pages/auth/BrandSide";
 import { Switch } from "@/components/ui/switch";
 
 type LoginFormValues = {
@@ -87,24 +84,19 @@ const LoginPage = () => {
 			setValue("email", rememberedEmail, { shouldValidate: true });
 			setValue("rememberMe", true);
 		}
-
-		const token =
-			typeof window !== "undefined"
-				? (Cookies.get(ACCESS_TOKEN_KEY) ?? null)
-				: null;
-		if (!token) return;
-	}, [router]);
+	}, [setValue]);
 
 	const onSubmit = async ({ email, password, rememberMe }: LoginFormValues) => {
-		const result = await login(email, password, { storeTokens: false });
-		if (!result?.access_token) return;
+		// const result = await login(email, password, { storeTokens: false });
+		// if (!result?.access_token) return;
 
-		if (rememberMe) {
-			localStorage.setItem("remembered_email", email);
-		} else {
-			localStorage.removeItem("remembered_email");
-		}
-		storeTokens(result.access_token, result.refresh_token);
+		// if (rememberMe) {
+		// 	localStorage.setItem("remembered_email", email);
+		// } else {
+		// 	localStorage.removeItem("remembered_email");
+		// }
+		// storeTokens(result.access_token, result.refresh_token);
+		router.push("/");
 	};
 
 	const onResetSubmit = async ({ email }: ResetPasswordValues) => {
