@@ -1,26 +1,424 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+	--color-main-turkishBlue: #4566b0;
+	--color-main-honeyBerry: #6582cf;
+	--color-main-portage: #859fef;
+	--color-main-lightining: #a4bdff;
+	--color-main-crystalBlue: #c4dcff;
+	--color-main-aztecBlue: #002f71;
+	--color--main-azureBlue: #084185;
+	--color-main-crystalPeak: #dbeafe;
+	--color-main-LebaneseBlue: #005ca9;
+	--color-interview-brand: #005ca9;
+	--color-interview-brand-hover: #004a87;
+	--color-interview-brand-soft: #dbeafe;
+	--color-interview-brand-ink: #0f172a;
+	--color-interview-accent-emerald: #00bc7d;
+	--color-interview-accent-danger: #cc0000;
+	--color-interview-page-bg: #f8fafc;
+	--color-interview-surface: #ffffff;
+	--color-interview-surface-2: #f1f5f9;
+	--color-interview-border: #e2e8f0;
+	--color-interview-text: #1e293b;
+	--color-interview-text-dim: #64748b;
+	--color-interview-accent: #3b6ef5;
+	--color-interview-accent-2: #22c47a;
+	--color-interview-warn: #f5a623;
+	--color-interview-danger: #e85454;
+	--radius: 0.625rem;
+	--card: oklch(1 0 0);
+	--card-foreground: oklch(0.145 0 0);
+	--popover: oklch(1 0 0);
+	--popover-foreground: oklch(0.145 0 0);
+	--primary: oklch(0.205 0 0);
+	--primary-foreground: oklch(0.985 0 0);
+	--secondary: oklch(0.97 0 0);
+	--secondary-foreground: oklch(0.205 0 0);
+	--muted: oklch(0.97 0 0);
+	--muted-foreground: oklch(0.556 0 0);
+	--accent: oklch(0.97 0 0);
+	--accent-foreground: oklch(0.205 0 0);
+	--destructive: oklch(0.577 0.245 27.325);
+	--border: oklch(0.922 0 0);
+	--input: oklch(0.922 0 0);
+	--ring: oklch(0.708 0 0);
+	--chart-1: oklch(0.87 0 0);
+	--chart-2: oklch(0.556 0 0);
+	--chart-3: oklch(0.439 0 0);
+	--chart-4: oklch(0.371 0 0);
+	--chart-5: oklch(0.269 0 0);
+	--sidebar: oklch(0.985 0 0);
+	--sidebar-foreground: oklch(0.145 0 0);
+	--sidebar-primary: oklch(0.205 0 0);
+	--sidebar-primary-foreground: oklch(0.985 0 0);
+	--sidebar-accent: oklch(0.97 0 0);
+	--sidebar-accent-foreground: oklch(0.205 0 0);
+	--sidebar-border: oklch(0.922 0 0);
+	--sidebar-ring: oklch(0.708 0 0);
+	--resume-surface: #ffffff;
+	--resume-surface-soft: #f8fafc;
+	--resume-border: #e2e8f0;
+	--resume-text-strong: #0f172a;
+	--resume-text-muted: #64748b;
+	--resume-primary: #005ca9;
+	--resume-secondary: #4f39f6;
+	--resume-success: #009966;
+	--resume-warning: #f59e0b;
+	--resume-danger: #ec003f;
+	--resume-score-from: #fe9a00;
+	--resume-score-to: #e17100;
+	--resume-summary-from: #4f39f6;
+	--resume-summary-to: #6549ff;
+	--resume-chip-from: #f1f5f9;
+	--resume-chip-to: #e2e8f0;
+	--resume-stat-success-from: #d1fae5;
+	--resume-stat-success-to: #a7f3d0;
+	--resume-stat-danger-from: #ffe4e6;
+	--resume-stat-danger-to: #fecdd3;
+	--resume-stat-info-from: #dbeafe;
+	--resume-stat-info-to: #bfdbfe;
+	--resume-stat-purple-from: #f3e8ff;
+	--resume-stat-purple-to: #e9d5ff;
+	--background: oklch(1 0 0);
+	--foreground: oklch(0.145 0 0);
+}
+
+html:not(.dark) .light-neutral-scope .text-blue-700 {
+	color: #111111 !important;
+}
+
+html:not(.dark) .light-neutral-scope .text-blue-600 {
+	color: #333333 !important;
+}
+
+html:not(.dark) .light-neutral-scope .text-blue-500 {
+	color: #555555 !important;
+}
+
+html:not(.dark) .light-neutral-scope .text-blue-700\/70 {
+	color: rgba(17, 17, 17, 0.7) !important;
+}
+
+html:not(.dark) .light-neutral-scope .text-blue-600\/70 {
+	color: rgba(51, 51, 51, 0.7) !important;
+}
+
+html:not(.dark) .light-neutral-scope .bg-blue-50 {
+	background-color: #fafafa !important;
+}
+
+html:not(.dark) .light-neutral-scope .bg-blue-100 {
+	background-color: #f5f5f5 !important;
+}
+
+html:not(.dark) .light-neutral-scope .bg-blue-200 {
+	background-color: #e5e5e5 !important;
+}
+
+/* html:not(.dark) .light-neutral-scope .bg-white {
+  background-color: #fafafa !important;
+} */
+
+html:not(.dark) .light-neutral-scope .bg-blue-50\/30 {
+	background-color: rgba(250, 250, 250, 0.3) !important;
+}
+
+html:not(.dark) .light-neutral-scope .bg-blue-50\/40 {
+	background-color: rgba(250, 250, 250, 0.4) !important;
+}
+
+html:not(.dark) .light-neutral-scope .bg-blue-50\/60 {
+	background-color: rgba(250, 250, 250, 0.6) !important;
+}
+
+html:not(.dark) .light-neutral-scope .bg-blue-100\/50 {
+	background-color: rgba(245, 245, 245, 0.5) !important;
+}
+
+html:not(.dark) .light-neutral-scope .bg-blue-100\/60 {
+	background-color: rgba(245, 245, 245, 0.6) !important;
+}
+
+html:not(.dark) .light-neutral-scope .bg-blue-100\/70 {
+	background-color: rgba(245, 245, 245, 0.7) !important;
+}
+
+html:not(.dark) .light-neutral-scope .bg-blue-100\/80 {
+	background-color: rgba(245, 245, 245, 0.8) !important;
+}
+
+html:not(.dark) .light-neutral-scope .bg-blue-200\/60 {
+	background-color: rgba(229, 229, 229, 0.6) !important;
+}
+
+html:not(.dark) .light-neutral-scope .border-blue-100 {
+	border-color: #ededed !important;
+}
+
+html:not(.dark) .light-neutral-scope .border-blue-200 {
+	border-color: #e5e5e5 !important;
+}
+
+html:not(.dark) .light-neutral-scope .border-blue-300 {
+	border-color: #d4d4d4 !important;
+}
+
+html:not(.dark) .light-neutral-scope .border-blue-400 {
+	border-color: #bdbdbd !important;
+}
+
+html:not(.dark) .light-neutral-scope .border-blue-200\/80 {
+	border-color: rgba(229, 229, 229, 0.8) !important;
+}
+
+html:not(.dark) .light-neutral-scope .border-blue-400\/60 {
+	border-color: rgba(180, 180, 180, 0.6) !important;
+}
+
+html:not(.dark) .light-neutral-scope .shadow-blue-200\/60 {
+	--tw-shadow-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html:not(.dark) .light-neutral-scope .ring-blue-100 {
+	--tw-ring-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html:not(.dark) .light-neutral-scope .ring-blue-200 {
+	--tw-ring-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+html:not(.dark) .light-neutral-scope .hover\:bg-blue-50:hover {
+	background-color: #fafafa !important;
+}
+
+/* html:not(.dark) .light-neutral-scope .hover\:bg-blue-100:hover {
+  background-color: #f5f5f5 !important;
+} */
+
+html:not(.dark) .light-neutral-scope .hover\:bg-blue-100\/80:hover {
+	background-color: rgba(245, 245, 245, 0.8) !important;
+}
+
+html:not(.dark) .light-neutral-scope .hover\:border-blue-300:hover {
+	border-color: #d4d4d4 !important;
+}
+
+html:not(.dark) .light-neutral-scope .hover\:border-blue-400:hover {
+	border-color: #bdbdbd !important;
+}
+
+html:not(.dark) .light-neutral-scope .hover\:text-blue-700:hover {
+	color: #111111 !important;
+}
+
+html:not(.dark) .light-neutral-scope .hover\:text-blue-600:hover {
+	color: #333333 !important;
+}
+
+html:not(.dark) .light-neutral-scope .shadow-blue-200 {
+	--tw-shadow-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html:not(.dark) .light-neutral-scope .shadow-blue-300 {
+	--tw-shadow-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+html:not(.dark) .light-neutral-scope .shadow-blue-300\/60 {
+	--tw-shadow-color: rgba(0, 0, 0, 0.1) !important;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--font-sans: var(--font-sans);
+	--color-main-crystalPeak: var(--color-main-crystalPeak);
+	--color-main-LebaneseBlue: var(--color-main-LebaneseBlue);
+	--color-main-turkishBlue: var(--color-main-turkishBlue);
+	--color-main-honeyBerry: var(--color-main-honeyBerry);
+	--color-main-portage: var(--color-main-portage);
+	--color-main-lightining: var(--color-main-lightining);
+	--color-main-crystalBlue: var(--color-main-crystalBlue);
+	--color-main-aztecBlue: var(--color-main-aztecBlue);
+	--color--main-azureBlue: var(--color--main-azureBlue);
+	--color-interview-brand: var(--color-interview-brand);
+	--color-interview-brand-hover: var(--color-interview-brand-hover);
+	--color-interview-brand-soft: var(--color-interview-brand-soft);
+	--color-interview-brand-ink: var(--color-interview-brand-ink);
+	--color-interview-accent-emerald: var(--color-interview-accent-emerald);
+	--color-interview-accent-danger: var(--color-interview-accent-danger);
+	--color-interview-page-bg: var(--color-interview-page-bg);
+	--color-interview-surface: var(--color-interview-surface);
+	--color-interview-surface-2: var(--color-interview-surface-2);
+	--color-interview-border: var(--color-interview-border);
+	--color-interview-text: var(--color-interview-text);
+	--color-interview-text-dim: var(--color-interview-text-dim);
+	--color-interview-accent: var(--color-interview-accent);
+	--color-interview-accent-2: var(--color-interview-accent-2);
+	--color-interview-warn: var(--color-interview-warn);
+	--color-interview-danger: var(--color-interview-danger);
+	--color-sidebar-ring: var(--sidebar-ring);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar: var(--sidebar);
+	--color-resume-surface: var(--resume-surface);
+	--color-resume-surface-soft: var(--resume-surface-soft);
+	--color-resume-border: var(--resume-border);
+	--color-resume-text-strong: var(--resume-text-strong);
+	--color-resume-text-muted: var(--resume-text-muted);
+	--color-resume-primary: var(--resume-primary);
+	--color-resume-secondary: var(--resume-secondary);
+	--color-resume-success: var(--resume-success);
+	--color-resume-warning: var(--resume-warning);
+	--color-resume-danger: var(--resume-danger);
+	--color-resume-score-from: var(--resume-score-from);
+	--color-resume-score-to: var(--resume-score-to);
+	--color-resume-summary-from: var(--resume-summary-from);
+	--color-resume-summary-to: var(--resume-summary-to);
+	--color-resume-chip-from: var(--resume-chip-from);
+	--color-resume-chip-to: var(--resume-chip-to);
+	--color-resume-stat-success-from: var(--resume-stat-success-from);
+	--color-resume-stat-success-to: var(--resume-stat-success-to);
+	--color-resume-stat-danger-from: var(--resume-stat-danger-from);
+	--color-resume-stat-danger-to: var(--resume-stat-danger-to);
+	--color-resume-stat-info-from: var(--resume-stat-info-from);
+	--color-resume-stat-info-to: var(--resume-stat-info-to);
+	--color-resume-stat-purple-from: var(--resume-stat-purple-from);
+	--color-resume-stat-purple-to: var(--resume-stat-purple-to);
+	--color-chart-5: var(--chart-5);
+	--color-chart-4: var(--chart-4);
+	--color-chart-3: var(--chart-3);
+	--color-chart-2: var(--chart-2);
+	--color-chart-1: var(--chart-1);
+	--color-ring: var(--ring);
+	--color-input: var(--input);
+	--color-border: var(--border);
+	--color-destructive: var(--destructive);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-accent: var(--accent);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-muted: var(--muted);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-secondary: var(--secondary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-primary: var(--primary);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-popover: var(--popover);
+	--color-card-foreground: var(--card-foreground);
+	--color-card: var(--card);
+	--radius-sm: calc(var(--radius) - 4px);
+	--radius-md: calc(var(--radius) - 2px);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) + 4px);
+	--radius-2xl: calc(var(--radius) + 8px);
+	--radius-3xl: calc(var(--radius) + 12px);
+	--radius-4xl: calc(var(--radius) + 16px);
+	--font-heading: var(--font-sans);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root.dark {
+	--background: #1f1f1f;
+	--foreground: #fafafa;
+	--color-main-turkishBlue: #4566b0;
+	--color-main-honeyBerry: #6582cf;
+	--color-main-portage: #859fef;
+	--color-main-lightining: #a4bdff;
+	--color-main-crystalBlue: #c4dcff;
+	--color-main-aztecBlue: #002f71;
+	--color--main-azureBlue: #084185;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.dark {
+	--background: oklch(0.145 0 0);
+	--foreground: oklch(0.985 0 0);
+	--card: oklch(0.205 0 0);
+	--card-foreground: oklch(0.985 0 0);
+	--popover: oklch(0.205 0 0);
+	--popover-foreground: oklch(0.985 0 0);
+	--primary: oklch(0.922 0 0);
+	--primary-foreground: oklch(0.205 0 0);
+	--secondary: oklch(0.269 0 0);
+	--secondary-foreground: oklch(0.985 0 0);
+	--muted: oklch(0.269 0 0);
+	--muted-foreground: oklch(0.708 0 0);
+	--accent: oklch(0.269 0 0);
+	--accent-foreground: oklch(0.985 0 0);
+	--destructive: oklch(0.704 0.191 22.216);
+	--border: oklch(1 0 0 / 10%);
+	--input: oklch(1 0 0 / 15%);
+	--ring: oklch(0.556 0 0);
+	--chart-1: oklch(0.87 0 0);
+	--chart-2: oklch(0.556 0 0);
+	--chart-3: oklch(0.439 0 0);
+	--chart-4: oklch(0.371 0 0);
+	--chart-5: oklch(0.269 0 0);
+	--sidebar: oklch(0.205 0 0);
+	--sidebar-foreground: oklch(0.985 0 0);
+	--sidebar-primary: oklch(0.488 0.243 264.376);
+	--sidebar-primary-foreground: oklch(0.985 0 0);
+	--sidebar-accent: oklch(0.269 0 0);
+	--sidebar-accent-foreground: oklch(0.985 0 0);
+	--sidebar-border: oklch(1 0 0 / 10%);
+	--sidebar-ring: oklch(0.556 0 0);
+	--resume-surface: #111827;
+	--resume-surface-soft: #0f172a;
+	--resume-border: #1f2937;
+	--resume-text-strong: #f8fafc;
+	--resume-text-muted: #94a3b8;
+	--resume-primary: #60a5fa;
+	--resume-secondary: #a78bfa;
+	--resume-success: #34d399;
+	--resume-warning: #fbbf24;
+	--resume-danger: #fb7185;
+	--resume-score-from: #ea580c;
+	--resume-score-to: #9a3412;
+	--resume-summary-from: #4338ca;
+	--resume-summary-to: #5b21b6;
+	--resume-chip-from: #1e293b;
+	--resume-chip-to: #334155;
+	--resume-stat-success-from: #064e3b;
+	--resume-stat-success-to: #065f46;
+	--resume-stat-danger-from: #4c0519;
+	--resume-stat-danger-to: #881337;
+	--resume-stat-info-from: #1e3a8a;
+	--resume-stat-info-to: #1d4ed8;
+	--resume-stat-purple-from: #3b0764;
+	--resume-stat-purple-to: #6b21a8;
+	--color-interview-brand: #3b6ef5;
+	--color-interview-brand-hover: #5b87ff;
+	--color-interview-brand-soft: #1a2340;
+	--color-interview-brand-ink: #e8eaf2;
+	--color-interview-accent-emerald: #22c47a;
+	--color-interview-accent-danger: #e85454;
+	--color-interview-page-bg: #0d0f14;
+	--color-interview-surface: #13161e;
+	--color-interview-surface-2: #1a1e29;
+	--color-interview-border: #252935;
+	--color-interview-text: #e8eaf2;
+	--color-interview-text-dim: #8b92aa;
+	--color-interview-accent: #3b6ef5;
+	--color-interview-accent-2: #22c47a;
+	--color-interview-warn: #f5a623;
+	--color-interview-danger: #e85454;
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+	}
+
+	body {
+		@apply bg-background text-foreground;
+	}
+  html {
+    @apply font-sans;
+	}
 }
