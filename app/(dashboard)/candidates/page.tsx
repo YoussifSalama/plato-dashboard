@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
 	Search,
 	Filter,
@@ -14,9 +14,6 @@ import {
 	TrendingUp,
 	TrendingDown,
 	Users,
-	ClipboardList,
-	MessageSquare,
-	SendHorizontal,
 	ClipboardCheck,
 	Calendar,
 	CircleCheck,
@@ -28,6 +25,10 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import clsx from "clsx";
+import { apiClient } from "@/lib/apiClient";
+import PaginationBar from "@/shared/common/features/PaginationBar";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type CandidateStatus =
 	| "shortlisted"
@@ -38,6 +39,8 @@ type CandidateStatus =
 
 type Candidate = {
 	id: number;
+	applicationId: number;
+	profileId: number | null;
 	initials: string;
 	avatarColor: string;
 	name: string;
@@ -46,13 +49,75 @@ type Candidate = {
 	phone: string;
 	location: string;
 	appliedAgo: string;
-	rating: number;
+	rating: number | null;
 	status: CandidateStatus;
 };
+
+type ApiApplication = {
+	application_id: number;
+	candidate_id: number;
+	profile_id: number | null;
+	candidate_name: string;
+	candidate_email: string | null;
+	candidate_phone: string | null;
+	candidate_title: string | null;
+	candidate_location: string | null;
+	applied_ago: string;
+	score_out_of_5: number | null;
+	status: string;
+};
+
+type ApiSummary = {
+	total: number;
+	in_review: number;
+	interviewed: number;
+	got_offer: number;
+};
+
+// ─── Config ───────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 5;
+
+const AVATAR_COLORS = [
+	"bg-emerald-500",
+	"bg-violet-500",
+	"bg-teal-500",
+	"bg-amber-500",
+	"bg-blue-500",
+	"bg-rose-500",
+	"bg-indigo-500",
+	"bg-cyan-500",
+];
+
+const STATUS_CONFIG: Record<
+	CandidateStatus,
+	{ label: string; className: string }
+> = {
+	shortlisted: { label: "Shortlisted", className: "bg-teal-500 text-white" },
+	active: { label: "Active", className: "bg-emerald-500 text-white" },
+	offer: { label: "Offer", className: "bg-orange-400 text-white" },
+	interview: { label: "Interview", className: "bg-amber-400 text-white" },
+	rejected: { label: "Rejected", className: "bg-rose-500 text-white" },
+};
+
+const STATUS_FILTER_OPTIONS = [
+	{ label: "All Status", value: "all" },
+	{ label: "Shortlisted", value: "shortlisted" },
+	{ label: "Active", value: "active" },
+	{ label: "Offer", value: "offer" },
+	{ label: "Interview", value: "interview" },
+	{ label: "Rejected", value: "rejected" },
+] as const;
+
+type StatusFilter = (typeof STATUS_FILTER_OPTIONS)[number]["value"];
+
+// ─── Mock data (fallback when API returns no records) ─────────────────────────
 
 const MOCK_CANDIDATES: Candidate[] = [
 	{
 		id: 1,
+		applicationId: 1,
+		profileId: null,
 		initials: "SJ",
 		avatarColor: "bg-emerald-500",
 		name: "Sarah Johnson",
@@ -66,6 +131,8 @@ const MOCK_CANDIDATES: Candidate[] = [
 	},
 	{
 		id: 2,
+		applicationId: 2,
+		profileId: null,
 		initials: "MC",
 		avatarColor: "bg-violet-500",
 		name: "Michael Chen",
@@ -79,6 +146,8 @@ const MOCK_CANDIDATES: Candidate[] = [
 	},
 	{
 		id: 3,
+		applicationId: 3,
+		profileId: null,
 		initials: "ER",
 		avatarColor: "bg-teal-500",
 		name: "Emily Rodriguez",
@@ -92,6 +161,8 @@ const MOCK_CANDIDATES: Candidate[] = [
 	},
 	{
 		id: 4,
+		applicationId: 4,
+		profileId: null,
 		initials: "DK",
 		avatarColor: "bg-amber-500",
 		name: "David Kim",
@@ -105,6 +176,8 @@ const MOCK_CANDIDATES: Candidate[] = [
 	},
 	{
 		id: 5,
+		applicationId: 5,
+		profileId: null,
 		initials: "JT",
 		avatarColor: "bg-rose-500",
 		name: "Jessica Taylor",
@@ -118,83 +191,115 @@ const MOCK_CANDIDATES: Candidate[] = [
 	},
 ];
 
-const STATUS_CONFIG: Record<
-	CandidateStatus,
-	{ label: string; className: string }
-> = {
-	shortlisted: {
-		label: "Shortlisted",
-		className: "bg-teal-500 text-white",
-	},
-	active: {
-		label: "Active",
-		className: "bg-emerald-500 text-white",
-	},
-	offer: {
-		label: "Offer",
-		className: "bg-orange-400 text-white",
-	},
-	interview: {
-		label: "Interview",
-		className: "bg-amber-400 text-white",
-	},
-	rejected: {
-		label: "Rejected",
-		className: "bg-rose-500 text-white",
-	},
+const DEFAULT_SUMMARY: ApiSummary = {
+	total: 0,
+	in_review: 0,
+	interviewed: 0,
+	got_offer: 0,
 };
 
-const STAT_CARDS = [
-	{
-		label: "Total Candidates",
-		value: 156,
-		trend: "+16.6%",
-		trendUp: true,
-		icon: <Users className="h-5 w-5 text-[#48BB78]" />,
-		iconBg: "bg-[#48BB7833]",
-	},
-	{
-		label: "In Review",
-		value: 42,
-		trend: "+85",
-		trendUp: true,
-		icon: <ClipboardCheck className="h-5 w-5 text-[#905DF8]" />,
-		iconBg: "bg-[#905DF833]",
-	},
-	{
-		label: "Interviewed",
-		value: 28,
-		trend: "-3 days",
-		trendUp: false,
-		icon: <Calendar className="h-5 w-5 text-[#F6AD55]" />,
-		iconBg: "bg-[#F6AD5533]",
-	},
-	{
-		label: "Offers Sent",
-		value: 12,
-		trend: "+163",
-		trendUp: true,
-		icon: <CircleCheck className="h-5 w-5 text-teal-600" />,
-		iconBg: "bg-[#48BB7833]",
-	},
-];
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const STATUS_FILTER_OPTIONS = [
-	{ label: "All Status", value: "all" },
-	{ label: "Shortlisted", value: "shortlisted" },
-	{ label: "Active", value: "active" },
-	{ label: "Offer", value: "offer" },
-	{ label: "Interview", value: "interview" },
-	{ label: "Rejected", value: "rejected" },
-] as const;
+function getInitials(name: string): string {
+	return name
+		.split(" ")
+		.map((w) => w[0])
+		.slice(0, 2)
+		.join("")
+		.toUpperCase();
+}
 
-type StatusFilter = (typeof STATUS_FILTER_OPTIONS)[number]["value"];
+function getAvatarColor(id: number): string {
+	return AVATAR_COLORS[id % AVATAR_COLORS.length];
+}
+
+function mapApiStatus(apiStatus: string): CandidateStatus {
+	switch (apiStatus) {
+		case "shortlisted":
+			return "shortlisted";
+		case "in_interview":
+			return "interview";
+		case "offer":
+			return "offer";
+		case "rejected":
+			return "rejected";
+		default:
+			// "active" and "in_review" both map to active
+			return "active";
+	}
+}
+
+function mapApiToCandidate(app: ApiApplication): Candidate {
+	return {
+		id: app.candidate_id,
+		applicationId: app.application_id,
+		profileId: app.profile_id,
+		initials: getInitials(app.candidate_name),
+		avatarColor: getAvatarColor(app.candidate_id),
+		name: app.candidate_name,
+		position: app.candidate_title ?? "—",
+		email: app.candidate_email ?? "—",
+		phone: app.candidate_phone ?? "—",
+		location: app.candidate_location ?? "—",
+		appliedAgo: `Applied ${app.applied_ago}`,
+		rating: app.score_out_of_5,
+		status: mapApiStatus(app.status),
+	};
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 const CandidatesPage = () => {
+	const [candidates, setCandidates] = useState<Candidate[]>([]);
+	const [summary, setSummary] = useState<ApiSummary>(DEFAULT_SUMMARY);
+	const [loading, setLoading] = useState(true);
+	const [usingMock, setUsingMock] = useState(false);
+
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+	const [page, setPage] = useState(1);
 
-	const filtered = MOCK_CANDIDATES.filter((c) => {
+	const fetchData = useCallback(async () => {
+		setLoading(true);
+		try {
+			const [listRes, summaryRes] = await Promise.all([
+				apiClient.get<{ data: { applications: ApiApplication[]; total: number } }>(
+					"/api/candidate"
+				),
+				apiClient.get<{ data: ApiSummary }>("/api/candidate?summary=1"),
+			]);
+
+			const apiApplications = listRes.data.data.applications;
+			const apiSummary = summaryRes.data.data;
+
+			if (apiApplications.length === 0) {
+				setCandidates(MOCK_CANDIDATES);
+				setSummary(DEFAULT_SUMMARY);
+				setUsingMock(true);
+			} else {
+				setCandidates(apiApplications.map(mapApiToCandidate));
+				setSummary(apiSummary);
+				setUsingMock(false);
+			}
+		} catch {
+			setCandidates(MOCK_CANDIDATES);
+			setSummary(DEFAULT_SUMMARY);
+			setUsingMock(true);
+		} finally {
+			setLoading(false);
+		}
+	}, []);
+
+	useEffect(() => {
+		fetchData();
+	}, [fetchData]);
+
+	// Reset page on filter/search change
+	useEffect(() => {
+		setPage(1);
+	}, [search, statusFilter]);
+
+	const filtered = candidates.filter((c) => {
 		const matchesSearch =
 			!search ||
 			c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -202,6 +307,45 @@ const CandidatesPage = () => {
 		const matchesStatus = statusFilter === "all" || c.status === statusFilter;
 		return matchesSearch && matchesStatus;
 	});
+
+	const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+	const safePage = Math.min(page, totalPages);
+	const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+	const statCards = [
+		{
+			label: "Total Candidates",
+			value: usingMock ? 156 : summary.total,
+			trend: "+16.6%",
+			trendUp: true,
+			icon: <Users className="h-5 w-5 text-[#48BB78]" />,
+			iconBg: "bg-[#48BB7833]",
+		},
+		{
+			label: "In Review",
+			value: usingMock ? 42 : summary.in_review,
+			trend: "+85",
+			trendUp: true,
+			icon: <ClipboardCheck className="h-5 w-5 text-[#905DF8]" />,
+			iconBg: "bg-[#905DF833]",
+		},
+		{
+			label: "Interviewed",
+			value: usingMock ? 28 : summary.interviewed,
+			trend: "-3 days",
+			trendUp: false,
+			icon: <Calendar className="h-5 w-5 text-[#F6AD55]" />,
+			iconBg: "bg-[#F6AD5533]",
+		},
+		{
+			label: "Offers Sent",
+			value: usingMock ? 12 : summary.got_offer,
+			trend: "+163",
+			trendUp: true,
+			icon: <CircleCheck className="h-5 w-5 text-teal-600" />,
+			iconBg: "bg-[#48BB7833]",
+		},
+	];
 
 	return (
 		<section className="space-y-6 mx-auto w-full">
@@ -217,7 +361,7 @@ const CandidatesPage = () => {
 
 			{/* Stat Cards */}
 			<div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-				{STAT_CARDS.map(({ label, value, trend, trendUp, icon, iconBg }) => (
+				{statCards.map(({ label, value, trend, trendUp, icon, iconBg }) => (
 					<div
 						key={label}
 						className="relative flex flex-col gap-3 rounded-[16px] bg-white border border-slate-100 px-5 py-5 shadow-xs dark:border-slate-800 dark:bg-slate-950"
@@ -250,7 +394,7 @@ const CandidatesPage = () => {
 								{label}
 							</span>
 							<span className="text-[26px] font-bold text-[#2D3748] leading-tight dark:text-slate-100">
-								{value}
+								{loading ? "—" : value}
 							</span>
 						</div>
 					</div>
@@ -304,16 +448,20 @@ const CandidatesPage = () => {
 
 			{/* Candidate Cards */}
 			<div className="flex flex-col gap-3">
-				{filtered.length === 0 ? (
+				{loading ? (
+					<div className="rounded-[16px] bg-white border border-slate-100 px-6 py-10 text-center text-slate-400 dark:border-slate-800 dark:bg-slate-950">
+						Loading candidates...
+					</div>
+				) : paged.length === 0 ? (
 					<div className="rounded-[16px] bg-white border border-slate-100 px-6 py-10 text-center text-slate-500 dark:border-slate-800 dark:bg-slate-950">
 						No candidates found.
 					</div>
 				) : (
-					filtered.map((candidate) => {
+					paged.map((candidate) => {
 						const statusCfg = STATUS_CONFIG[candidate.status];
 						return (
 							<div
-								key={candidate.id}
+								key={`${candidate.id}-${candidate.applicationId}`}
 								className="flex items-center gap-5 rounded-[16px] bg-white border border-slate-100 px-6 py-6 shadow-xs dark:border-slate-800 dark:bg-slate-950"
 							>
 								{/* Avatar */}
@@ -334,11 +482,11 @@ const CandidatesPage = () => {
 									<p className="text-[12px] text-slate-400 mt-0.5">
 										{candidate.position}
 									</p>
-									<div className="flex items-center gap-2 text-[12px] text-slate-400  dark:text-slate-400">
+									<div className="flex items-center gap-2 text-[12px] text-slate-400 dark:text-slate-400">
 										<Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" />
 										<span className="truncate">{candidate.email}</span>
 									</div>
-									<div className="flex items-center gap-2 text-[12px] text-slate-400  dark:text-slate-400">
+									<div className="flex items-center gap-2 text-[12px] text-slate-400 dark:text-slate-400">
 										<Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
 										<span>{candidate.appliedAgo}</span>
 									</div>
@@ -350,7 +498,6 @@ const CandidatesPage = () => {
 										<Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" />
 										<span>{candidate.phone}</span>
 									</div>
-
 									<div className="flex items-center gap-2 text-[12px] text-slate-500 dark:text-slate-400">
 										<MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
 										<span>{candidate.location}</span>
@@ -358,12 +505,21 @@ const CandidatesPage = () => {
 								</div>
 
 								{/* Right: rating + status + button */}
-								<div className="self-start flex flex-col shrink-0  gap-6">
+								<div className="self-start flex flex-col shrink-0 gap-6">
 									<div className="flex items-center gap-x-2">
 										<div className="flex items-center gap-1.5">
-											<Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+											<Star
+												className={clsx(
+													"h-4 w-4",
+													candidate.rating != null
+														? "fill-amber-400 text-amber-400"
+														: "text-slate-300 dark:text-slate-600"
+												)}
+											/>
 											<span className="text-[14px] font-bold text-slate-700 dark:text-slate-200">
-												{candidate.rating.toFixed(1)}
+												{candidate.rating != null
+													? candidate.rating.toFixed(1)
+													: "—"}
 											</span>
 										</div>
 										<span
@@ -384,6 +540,18 @@ const CandidatesPage = () => {
 					})
 				)}
 			</div>
+
+			{/* Pagination */}
+			{!loading && filtered.length > 0 && (
+				<PaginationBar
+					currentPage={safePage}
+					totalPages={totalPages}
+					onPageChange={setPage}
+					totalItems={filtered.length}
+					itemName="candidates"
+					pageSize={PAGE_SIZE}
+				/>
+			)}
 		</section>
 	);
 };
