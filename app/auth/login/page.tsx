@@ -87,15 +87,15 @@ const LoginPage = () => {
 	}, [setValue]);
 
 	const onSubmit = async ({ email, password, rememberMe }: LoginFormValues) => {
-		// const result = await login(email, password, { storeTokens: false });
-		// if (!result?.access_token) return;
+		const result = await login(email, password, { storeTokens: false });
+		if (!result?.access_token) return;
 
-		// if (rememberMe) {
-		// 	localStorage.setItem("remembered_email", email);
-		// } else {
-		// 	localStorage.removeItem("remembered_email");
-		// }
-		// storeTokens(result.access_token, result.refresh_token);
+		if (rememberMe) {
+			localStorage.setItem("remembered_email", email);
+		} else {
+			localStorage.removeItem("remembered_email");
+		}
+		storeTokens(result.access_token, result.refresh_token);
 		router.push("/");
 	};
 
