@@ -52,12 +52,14 @@ const UserTable = ({
 	hasLoaded,
 	onBlock,
 	onDelete,
+	onEdit,
 }: {
 	users: UserListItem[];
 	loading: boolean;
 	hasLoaded: boolean;
 	onBlock?: (user: UserListItem) => void;
 	onDelete?: (userId: number) => void;
+	onEdit?: (user: UserListItem) => void;
 }) => {
 	const [userToDelete, setUserToDelete] = useState<UserListItem | null>(null);
 	const [deleting, setDeleting] = useState(false);
@@ -177,6 +179,7 @@ const UserTable = ({
 											<Eye className="h-[18px] w-[18px] stroke-[2.5]" />
 										</button>
 										<button
+											onClick={() => onEdit?.(user)}
 											className="text-[#005CA9] hover:text-amber-500 transition-colors"
 											title="Edit user"
 										>
