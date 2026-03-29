@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -26,7 +26,6 @@ import {
 	Mail,
 	Phone,
 	MapPin,
-	CircleCheckBig,
 } from "lucide-react";
 import {
 	DropdownMenu,
@@ -35,6 +34,13 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import clsx from "clsx";
+import { apiClient } from "@/lib/apiClient";
+import { errorToast, successToast } from "@/shared/helper/toast";
+import {
+	resolveErrorMessage,
+} from "@/shared/helper/apiMessages";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type UserFilterState = {
 	partial_matching: string;
@@ -56,29 +62,59 @@ type NewUserForm = {
 	verify_automatically: boolean;
 };
 
-const MOCK_USERS: UserListItem[] = [
-	{
-		activity_count: 12,
-		email: "m.wadia@gmail.com",
-		id: 2,
-		joined_at: "2026-03-01T14:30:00Z",
-		name: "Marian Wadia",
-		status: "active",
-		type: "company",
-	},
-	{
-		activity_count: 3,
-		email: "a.ali@gmail.com",
-		id: 4,
-		joined_at: "2026-03-01T14:30:00Z",
-		name: "Ahmed Ali",
-		status: "blocked",
-		type: "candidate",
-	},
-];
+type EditUserForm = {
+	f_name: string;
+	l_name: string;
+	email: string;
+	verified: boolean;
+};
+
+type ApiUser = {
+	id: number;
+	type: "company" | "candidate";
+	name: string;
+	email: string | null;
+	status: boolean;
+	created_at: string;
+	activity: number;
+};
+
+function mapToListItem(u: ApiUser): UserListItem {
+	return {
+		id: u.id,
+		name: u.name,
+		email: u.email ?? "",
+		type: u.type,
+		status: u.status ? "active" : "blocked",
+		joined_at: u.created_at,
+		activity_count: u.activity,
+	};
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+const EMPTY_FORM: NewUserForm = {
+	name: "",
+	email: "",
+	phone: "",
+	location: "",
+	subscription_plan: "",
+	password: "",
+	type: "company",
+	send_welcome_email: false,
+	activate_immediately: false,
+	verify_automatically: false,
+};
 
 const UsersPage = () => {
-	const [users] = useState<UserListItem[]>(MOCK_USERS);
+	// ── Data state ────────────────────────────────────────────────────────────
+	const [users, setUsers] = useState<UserListItem[]>([]);
+	const [loading, setLoading] = useState(false);
+	const [hasLoaded, setHasLoaded] = useState(false);
+	const [totalCompanies, setTotalCompanies] = useState(0);
+	const [totalCandidates, setTotalCandidates] = useState(0);
+
+	// ── Filter state ──────────────────────────────────────────────────────────
 	const [filters, setFilters] = useState<UserFilterState>({
 		partial_matching: "",
 		page: 1,
@@ -86,21 +122,163 @@ const UsersPage = () => {
 		type: "all",
 	});
 
+	// ── Add modal state ───────────────────────────────────────────────────────
 	const [addModalOpen, setAddModalOpen] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
-	const EMPTY_FORM: NewUserForm = {
-		name: "",
-		email: "",
-		phone: "",
-		location: "",
-		subscription_plan: "",
-		password: "",
-		type: "company",
-		send_welcome_email: false,
-		activate_immediately: false,
-		verify_automatically: false,
-	};
 	const [form, setForm] = useState<NewUserForm>(EMPTY_FORM);
+
+	// ── Edit modal state ──────────────────────────────────────────────────────
+	const [editModalOpen, setEditModalOpen] = useState(false);
+	const [editingUser, setEditingUser] = useState<UserListItem | null>(null);
+	const [editForm, setEditForm] = useState<EditUserForm>({
+		f_name: "",
+		l_name: "",
+		email: "",
+		verified: false,
+	});
+	const [editSubmitting, setEditSubmitting] = useState(false);
+
+	// ── Fetch ─────────────────────────────────────────────────────────────────
+	const fetchUsers = useCallback(async () => {
+		setLoading(true);
+		try {
+			const res = await apiClient.get<{
+				data: {
+					total_companies: number;
+					total_candidates: number;
+					users: ApiUser[];
+				};
+			}>("/api/user");
+			const { users: apiUsers, total_companies, total_candidates } =
+				res.data.data;
+			setUsers(apiUsers.map(mapToListItem));
+			setTotalCompanies(total_companies);
+			setTotalCandidates(total_candidates);
+		} catch (err) {
+			errorToast(resolveErrorMessage(err, "Failed to load users."));
+		} finally {
+			setLoading(false);
+			setHasLoaded(true);
+		}
+	}, []);
+
+	useEffect(() => {
+		fetchUsers();
+	}, [fetchUsers]);
+
+	// ── Handlers ──────────────────────────────────────────────────────────────
+	const handleAddUser = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+		e.preventDefault();
+		setSubmitting(true);
+		try {
+			const { type, name, email, phone, location, subscription_plan, password } =
+				form;
+
+			const common = {
+				email,
+				phone: phone || undefined,
+				password,
+				send_welcome_email: form.send_welcome_email,
+				activate_immediately: form.activate_immediately,
+				verify_immediately: form.verify_automatically,
+			};
+
+			const payload =
+				type === "company"
+					? {
+							...common,
+							name,
+							location: location || undefined,
+							plan: subscription_plan || undefined,
+						}
+					: {
+							...common,
+							f_name: name.split(" ")[0],
+							l_name: name.split(" ").slice(1).join(" ") || name.split(" ")[0],
+						};
+
+			await apiClient.post(`/api/user/${type}`, payload);
+			successToast("User created successfully.");
+			setAddModalOpen(false);
+			setForm(EMPTY_FORM);
+			await fetchUsers();
+		} catch (err) {
+			errorToast(resolveErrorMessage(err, "Failed to create user."));
+		} finally {
+			setSubmitting(false);
+		}
+	};
+
+	const handleOpenEdit = (user: UserListItem) => {
+		const parts = user.name.trim().split(" ");
+		setEditingUser(user);
+		setEditForm({
+			f_name: parts[0] ?? "",
+			l_name: parts.slice(1).join(" "),
+			email: user.email,
+			verified: user.status === "active",
+		});
+		setEditModalOpen(true);
+	};
+
+	const handleEditUser = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+		e.preventDefault();
+		if (!editingUser) return;
+		setEditSubmitting(true);
+		try {
+			await apiClient.patch(
+				`/api/user/${editingUser.type}/${editingUser.id}`,
+				{
+					email: editForm.email,
+					f_name: editForm.f_name,
+					l_name: editForm.l_name || undefined,
+					verified: editForm.verified,
+				}
+			);
+			successToast("User updated.");
+			setEditModalOpen(false);
+			setEditingUser(null);
+			await fetchUsers();
+		} catch (err) {
+			errorToast(resolveErrorMessage(err, "Failed to update user."));
+		} finally {
+			setEditSubmitting(false);
+		}
+	};
+
+	const handleDelete = async (userId: number) => {
+		const user = users.find((u) => u.id === userId);
+		if (!user) return;
+		try {
+			await apiClient.delete(`/api/user/${user.type}/${userId}`);
+			setUsers((prev) => prev.filter((u) => u.id !== userId));
+			successToast("User deleted.");
+		} catch (err) {
+			errorToast(resolveErrorMessage(err, "Failed to delete user."));
+		}
+	};
+
+	const handleBlock = async (user: UserListItem) => {
+		const newVerified = user.status !== "active";
+		try {
+			await apiClient.patch(`/api/user/${user.type}/${user.id}`, {
+				verified: newVerified,
+			});
+			setUsers((prev) =>
+				prev.map((u) =>
+					u.id === user.id
+						? { ...u, status: newVerified ? "active" : "blocked" }
+						: u
+				)
+			);
+			successToast(newVerified ? "User activated." : "User blocked.");
+		} catch (err) {
+			errorToast(resolveErrorMessage(err, "Failed to update user status."));
+		}
+	};
+
+	// ── Derived ───────────────────────────────────────────────────────────────
+	const PAGE_SIZE = 10;
 
 	const filteredUsers = users.filter((u) => {
 		const matchesSearch =
@@ -113,15 +291,12 @@ const UsersPage = () => {
 		return matchesSearch && matchesStatus && matchesType;
 	});
 
-	const handleAddUser = async (e: React.FormEvent<HTMLFormElement>) => {
-		e.preventDefault();
-		setSubmitting(true);
-		// TODO: wire up to API
-		await new Promise((r) => setTimeout(r, 800));
-		setSubmitting(false);
-		setAddModalOpen(false);
-		setForm(EMPTY_FORM);
-	};
+	const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
+	const safePage = Math.min(filters.page, totalPages);
+	const pagedUsers = filteredUsers.slice(
+		(safePage - 1) * PAGE_SIZE,
+		safePage * PAGE_SIZE
+	);
 
 	const labelClass =
 		"block text-[12px] font-semibold text-slate-600 dark:text-slate-400 mb-1.5";
@@ -130,6 +305,7 @@ const UsersPage = () => {
 	const iconInputClass =
 		"flex items-center gap-2.5 rounded-[10px] border border-slate-200 bg-slate-50 px-3.5 py-2.5 focus-within:border-[#005ca9] focus-within:ring-2 focus-within:ring-[#005ca9]/10 transition dark:border-slate-700 dark:bg-slate-800";
 
+	// ── Render ────────────────────────────────────────────────────────────────
 	return (
 		<section className="space-y-6 mx-auto w-full">
 			{/* Header */}
@@ -158,20 +334,20 @@ const UsersPage = () => {
 				{[
 					{
 						label: "Total Users",
-						value: 1234,
-						icon: <Search className="h-5 w-5 text-white" />,
+						value: totalCompanies + totalCandidates,
+						icon: <Users className="h-5 w-5 text-white" />,
 						iconBg: "bg-[#005ca9]",
 					},
 					{
 						label: "Companies",
-						value: 342,
-						icon: <CircleCheckBig className="h-5 w-5 text-white" />,
+						value: totalCompanies,
+						icon: <Building2 className="h-5 w-5 text-white" />,
 						iconBg: "bg-[#905DF8]",
 					},
 					{
 						label: "Candidates",
-						value: 892,
-						icon: <CircleCheckBig className="h-5 w-5 text-white" />,
+						value: totalCandidates,
+						icon: <User className="h-5 w-5 text-white" />,
 						iconBg: "bg-[#48BB78]",
 					},
 				].map(({ label, value, icon, iconBg }) => (
@@ -184,7 +360,7 @@ const UsersPage = () => {
 								{label}
 							</span>
 							<span className="text-[25px] font-bold text-[#2D3748] leading-tight dark:text-slate-100">
-								{value.toLocaleString()}
+								{loading ? "—" : value.toLocaleString()}
 							</span>
 						</div>
 						<span
@@ -300,33 +476,27 @@ const UsersPage = () => {
 			{/* Table */}
 			<div className="rounded-[20px] bg-white shadow-xs border border-slate-100 dark:border-slate-800 dark:bg-slate-950 dark:shadow-none overflow-hidden pb-4">
 				<UserTable
-					users={filteredUsers}
-					loading={false}
-					hasLoaded={true}
-					onBlock={(user) => {
-						// TODO: wire up block/unblock API
-						console.log("toggle block", user.id);
-					}}
-					onDelete={(userId) => {
-						// TODO: wire up delete API
-						console.log("delete", userId);
-					}}
+					users={pagedUsers}
+					loading={loading}
+					hasLoaded={hasLoaded}
+					onEdit={handleOpenEdit}
+					onBlock={handleBlock}
+					onDelete={handleDelete}
 				/>
-				{filteredUsers.length > 10 && (
-					<div className="mt-4 px-2">
-						<PaginationBar
-							currentPage={filters.page}
-							totalPages={Math.ceil(filteredUsers.length / 10)}
-							totalItems={filteredUsers.length}
-							itemName="users"
-							onPageChange={(page) => setFilters((prev) => ({ ...prev, page }))}
-							className="border-0 shadow-none px-4"
-						/>
-					</div>
-				)}
+				<div className="mt-4 px-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+					<PaginationBar
+						currentPage={safePage}
+						totalPages={totalPages}
+						totalItems={filteredUsers.length}
+						itemName="users"
+						pageSize={PAGE_SIZE}
+						onPageChange={(page) => setFilters((prev) => ({ ...prev, page }))}
+						className="border-0 shadow-none px-4"
+					/>
+				</div>
 			</div>
 
-			{/* Add New User Modal */}
+			{/* ── Add New User Modal ─────────────────────────────────────────────── */}
 			<Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
 				<DialogContent className="sm:max-w-130">
 					<DialogHeader>
@@ -347,7 +517,13 @@ const UsersPage = () => {
 										<button
 											key={t}
 											type="button"
-											onClick={() => setForm((p) => ({ ...p, type: t }))}
+											onClick={() =>
+												setForm((p) => ({
+													...p,
+													type: t,
+													subscription_plan: t === "candidate" ? "" : p.subscription_plan,
+												}))
+											}
 											className={clsx(
 												"flex items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition-all",
 												selected
@@ -457,19 +633,31 @@ const UsersPage = () => {
 							</div>
 						</div>
 
-						{/* Subscription Plan */}
-						<div>
-							<label className={labelClass}>Subscription Plan</label>
-							<input
-								type="text"
-								placeholder="Pro Plan"
-								className={inputClass}
-								value={form.subscription_plan}
-								onChange={(e) =>
-									setForm((p) => ({ ...p, subscription_plan: e.target.value }))
-								}
-							/>
-						</div>
+						{/* Subscription Plan — company only */}
+						{form.type === "company" && (
+							<div>
+								<label className={labelClass}>Subscription Plan</label>
+								<select
+									className={inputClass}
+									value={form.subscription_plan}
+									onChange={(e) =>
+										setForm((p) => ({
+											...p,
+											subscription_plan: e.target.value,
+										}))
+									}
+								>
+									<option value="">Select a plan</option>
+									{(["STARTER", "GROWTH", "PRO", "EXTRA", "CUSTOM"] as const).map(
+										(plan) => (
+											<option key={plan} value={plan}>
+												{plan.charAt(0) + plan.slice(1).toLowerCase()} Plan
+											</option>
+										)
+									)}
+								</select>
+							</div>
+						)}
 
 						{/* Password */}
 						<div>
@@ -520,7 +708,10 @@ const UsersPage = () => {
 						<DialogFooter className="mt-2 gap-2 sm:gap-0">
 							<button
 								type="button"
-								onClick={() => setAddModalOpen(false)}
+								onClick={() => {
+									setAddModalOpen(false);
+									setForm(EMPTY_FORM);
+								}}
 								disabled={submitting}
 								className="inline-flex items-center justify-center rounded-[8px] border border-slate-200 bg-white px-4 py-2 text-[14px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
 							>
@@ -538,6 +729,116 @@ const UsersPage = () => {
 									</>
 								) : (
 									"Create User"
+								)}
+							</button>
+						</DialogFooter>
+					</form>
+				</DialogContent>
+			</Dialog>
+
+			{/* ── Edit User Modal ────────────────────────────────────────────────── */}
+			<Dialog
+				open={editModalOpen}
+				onOpenChange={(open) => {
+					if (!open) setEditingUser(null);
+					setEditModalOpen(open);
+				}}
+			>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle>Edit User</DialogTitle>
+						<DialogDescription>
+							Update details for{" "}
+							<span className="font-semibold text-slate-800 dark:text-slate-200">
+								{editingUser?.name}
+							</span>{" "}
+							<span className="capitalize text-slate-500">
+								({editingUser?.type})
+							</span>
+						</DialogDescription>
+					</DialogHeader>
+
+					<form onSubmit={handleEditUser} className="mt-4 space-y-4">
+						<div className="grid grid-cols-2 gap-4">
+							<div>
+								<label className={labelClass}>First Name</label>
+								<input
+									required
+									type="text"
+									className={inputClass}
+									value={editForm.f_name}
+									onChange={(e) =>
+										setEditForm((p) => ({ ...p, f_name: e.target.value }))
+									}
+								/>
+							</div>
+							<div>
+								<label className={labelClass}>Last Name</label>
+								<input
+									type="text"
+									className={inputClass}
+									value={editForm.l_name}
+									onChange={(e) =>
+										setEditForm((p) => ({ ...p, l_name: e.target.value }))
+									}
+								/>
+							</div>
+						</div>
+
+						<div>
+							<label className={labelClass}>Email Address</label>
+							<div className={iconInputClass}>
+								<Mail className="h-4 w-4 shrink-0 text-slate-400" />
+								<input
+									required
+									type="email"
+									className="w-full bg-transparent text-[14px] text-slate-800 placeholder:text-slate-400 outline-none dark:text-slate-200"
+									value={editForm.email}
+									onChange={(e) =>
+										setEditForm((p) => ({ ...p, email: e.target.value }))
+									}
+								/>
+							</div>
+						</div>
+
+						<label className="flex items-center gap-2.5 cursor-pointer rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/50">
+							<input
+								type="checkbox"
+								checked={editForm.verified}
+								onChange={(e) =>
+									setEditForm((p) => ({ ...p, verified: e.target.checked }))
+								}
+								className="h-4 w-4 rounded border-slate-300 accent-[#005ca9] cursor-pointer"
+							/>
+							<span className="text-[13px] text-slate-600 dark:text-slate-300">
+								Account verified (active)
+							</span>
+						</label>
+
+						<DialogFooter className="mt-2 gap-2 sm:gap-0">
+							<button
+								type="button"
+								onClick={() => {
+									setEditModalOpen(false);
+									setEditingUser(null);
+								}}
+								disabled={editSubmitting}
+								className="inline-flex items-center justify-center rounded-[8px] border border-slate-200 bg-white px-4 py-2 text-[14px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+							>
+								Cancel
+							</button>
+							<button
+								type="submit"
+								disabled={editSubmitting}
+								className="inline-flex items-center justify-center ml-3 rounded-[8px] bg-[#005ca9] px-5 py-2 text-[14px] font-semibold text-white hover:bg-[#004e8f] disabled:opacity-50 transition-colors"
+							>
+								{editSubmitting ? (
+									<>
+										<div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+										Saving...
+									</>
+								) : (
+									"Save Changes"
 								)}
 							</button>
 						</DialogFooter>
