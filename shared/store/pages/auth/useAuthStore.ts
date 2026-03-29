@@ -66,7 +66,7 @@ const useAuthStore = create<IAuthStore>((set) => {
 		login: async (email, password, options) => {
 			set({ loadingLogin: true });
 			try {
-				const result = await apiClient.post("/agency/login", {
+				const result = await apiClient.post("/api/admin/auth/login", {
 					email,
 					password,
 				});
@@ -190,7 +190,7 @@ const useAuthStore = create<IAuthStore>((set) => {
 			try {
 				const refreshToken = Cookies.get(REFRESH_TOKEN_KEY);
 				if (refreshToken) {
-					await apiClient.post("/agency/logout", {
+					await apiClient.post("/api/admin/auth/logout", {
 						refresh_token: refreshToken,
 					});
 				}
