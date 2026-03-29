@@ -10,8 +10,7 @@ import {
 // import useAgency from "@/shared/store/useAgency";
 // import useAgencyStore from "@/shared/store/pages/agency/useAgencyStore";
 import useAuthStore from "@/shared/store/pages/auth/useAuthStore";
-import { useEffect, useState } from "react";
-import { LogOut, ChevronLeft } from "lucide-react";
+import { useState } from "react";
 
 const getInitials = (name?: string | null) => {
 	if (!name) return "AC";
@@ -40,24 +39,7 @@ const Sidebar = ({
 	const unreadCount = 12;
 	// const { account } = useAgency();
 	// const { getOverview } = useAgencyStore();
-	const { logout } = useAuthStore();
 	const [agencyName, setAgencyName] = useState("Super Admin");
-
-	// useEffect(() => {
-	// 	void getUnreadNotifications();
-	// }, [getUnreadNotifications]);
-
-	// useEffect(() => {
-	// 	const fetchAgency = async () => {
-	// 		const overview = await getOverview();
-	// 		if (overview?.agency?.company_name) {
-	// 			setAgencyName(overview.agency.company_name);
-	// 		}
-	// 	};
-	// 	void fetchAgency();
-	// }, [getOverview]);
-
-	const initials = getInitials(account?.name);
 
 	return (
 		<aside
@@ -88,21 +70,6 @@ const Sidebar = ({
 						</span>
 					</div>
 				</Link>
-				{/* <button
-					onClick={onToggleSidebar}
-					className={clsx(
-						"absolute top-1/2 -translate-y-1/2 hidden lg:flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm hover:text-slate-600 hover:bg-slate-50 transition-all duration-300 cursor-pointer dark:border-slate-800 dark:bg-slate-950",
-						isCollapsed ? "-right-9" : "-right-3.5"
-					)}
-				>
-					<ChevronLeft
-						className={clsx(
-							"h-4 w-4 transition-transform duration-300",
-							isCollapsed && "rotate-180"
-						)}
-						strokeWidth={2.5}
-					/>
-				</button> */}
 			</div>
 
 			<div className="flex-1 overflow-y-auto mt-2 flex flex-col hide-scrollbar">
@@ -125,7 +92,7 @@ const Sidebar = ({
 						return (
 							<Link
 								key={route.href}
-								href={route.href}
+								href={route.href.includes("/none") ? `${pathname}` : route.href}
 								className={clsx(
 									"group flex items-center gap-4 py-3.5 text-[15px] font-medium transition-colors relative mx-6 rounded-[20px] pl-8",
 									isActive
@@ -158,7 +125,9 @@ const Sidebar = ({
 							return (
 								<Link
 									key={route.href}
-									href={route.href}
+									href={
+										route.href.includes("/none") ? `${pathname}` : route.href
+									}
 									className="group flex items-center gap-4 py-2 text-[15px] font-medium text-slate-500 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
 								>
 									<Icon className="h-5 w-5" strokeWidth={2.2} />
