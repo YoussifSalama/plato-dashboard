@@ -1,23 +1,12 @@
 import {
 	type LucideIcon,
-	Home,
-	Briefcase,
 	Users,
-	CalendarDays,
-	Mail,
-	BarChart2,
 	Settings,
-	HelpCircle,
 	CreditCard,
-	Tag,
-	Cpu,
-	Sparkles,
 	LayoutDashboardIcon,
 	LucideBriefcaseBusiness,
 	Calendar,
 	Gift,
-	PaperclipIcon,
-	Plane,
 	ChartColumn,
 	FileText,
 	Gauge,
@@ -58,27 +47,27 @@ export const sidebarRoutes: ISidebarRoute[] = [
 	{
 		label: "Subscriptions",
 		icon: CreditCard,
-		href: "/subscriptions",
+		href: "/none1",
 	},
 	{
 		label: "Qoutas",
 		icon: Gauge,
-		href: "/qoutas",
+		href: "/none2",
 	},
 	{
 		label: "Vouchers",
 		icon: Gift,
-		href: "vouchers",
+		href: "/none3",
 	},
 	{
 		label: "Content",
 		icon: FileText,
-		href: "content",
+		href: "/none4",
 	},
 	{
 		label: "Analytics",
 		icon: ChartColumn,
-		href: "analytics",
+		href: "/none5",
 	},
 ];
 
@@ -86,7 +75,7 @@ export const bottomRoutes: ISidebarRoute[] = [
 	{
 		label: "Settings",
 		icon: Settings,
-		href: "/settings",
+		href: "/none6",
 	},
 	// {
 	// 	label: "Help Center",
