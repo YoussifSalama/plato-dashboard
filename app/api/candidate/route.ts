@@ -23,7 +23,13 @@ type ApplicationWithRelations = Awaited<
 
 function deriveStatus(
 	app: ApplicationWithRelations
-): "active" | "in_review" | "shortlisted" | "in_interview" | "offer" | "rejected" {
+):
+	| "active"
+	| "in_review"
+	| "shortlisted"
+	| "in_interview"
+	| "offer"
+	| "rejected" {
 	// Offer: interview session with agency shortlist decision
 	const hasOffer = app.invitation_tokens.some((t) =>
 		t.interview_session?.feedbacks.some(
@@ -95,6 +101,7 @@ async function fetchApplications() {
 							recommendation: true,
 						},
 					},
+					id: true,
 				},
 			},
 			invitation_tokens: {
@@ -122,49 +129,108 @@ export async function GET(request: NextRequest) {
 
 	const { searchParams } = request.nextUrl;
 
-	if (searchParams.get("summary") === "1" || searchParams.get("summary") === "true") {
+	if (
+		searchParams.get("summary") === "1" ||
+		searchParams.get("summary") === "true"
+	) {
 		return getSummary();
 	}
 
 	return getList();
 }
 
+function formatDiff(current: number, prev: number): string {
+	const diff = current - prev;
+	if (diff === 0) return "+0";
+	return diff > 0 ? `+${diff}` : `${diff}`;
+}
+
+function formatPctDiff(current: number, prev: number): string {
+	if (prev === 0) return current > 0 ? "+100%" : "+0%";
+	const pct = ((current - prev) / prev) * 100;
+	const rounded = Math.round(pct * 10) / 10;
+	if (rounded === 0) return "+0%";
+	return rounded > 0 ? `+${rounded}%` : `${rounded}%`;
+}
+
 async function getSummary() {
-	const [total, inReview, interviewed, gotOffer] = await Promise.all([
-		prisma.jobApplication.count(),
+	const now = new Date();
 
-		// In review: has a resume analysis
-		prisma.jobApplication.count({
-			where: { resume: { resume_analysis: { isNot: null } } },
-		}),
+	const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+	const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+	const lastMonthEnd = new Date(thisMonthStart.getTime() - 1);
 
-		// Interviewed: has at least one invitation token with an interview session
-		prisma.jobApplication.count({
-			where: {
-				invitation_tokens: {
-					some: { interview_session: { isNot: null } },
+	const inReviewWhere = {
+		resume: { resume_analysis: { isNot: null } },
+	} as const;
+	const interviewedWhere = {
+		invitation_tokens: { some: { interview_session: { isNot: null } } },
+	} as const;
+	const offerWhere = {
+		invitation_tokens: {
+			some: {
+				interview_session: {
+					feedbacks: { some: { from: "agency", decision: "shortlist" } },
 				},
 			},
-		}),
+		},
+	} as const;
 
-		// Got offer: interview session where agency gave a shortlist decision
+	const [
+		total,
+		inReview,
+		interviewed,
+		gotOffer,
+		totalLastMonth,
+		inReviewLastMonth,
+		interviewedLastMonth,
+		gotOfferLastMonth,
+	] = await Promise.all([
+		prisma.jobApplication.count(),
+		prisma.jobApplication.count({ where: inReviewWhere }),
+		prisma.jobApplication.count({ where: interviewedWhere }),
+		prisma.jobApplication.count({ where: offerWhere }),
+
+		prisma.jobApplication.count({
+			where: { created_at: { gte: lastMonthStart, lte: lastMonthEnd } },
+		}),
 		prisma.jobApplication.count({
 			where: {
-				invitation_tokens: {
-					some: {
-						interview_session: {
-							feedbacks: {
-								some: { from: "agency", decision: "shortlist" },
-							},
-						},
-					},
-				},
+				...inReviewWhere,
+				created_at: { gte: lastMonthStart, lte: lastMonthEnd },
+			},
+		}),
+		prisma.jobApplication.count({
+			where: {
+				...interviewedWhere,
+				created_at: { gte: lastMonthStart, lte: lastMonthEnd },
+			},
+		}),
+		prisma.jobApplication.count({
+			where: {
+				...offerWhere,
+				created_at: { gte: lastMonthStart, lte: lastMonthEnd },
 			},
 		}),
 	]);
 
+	const thisMonthTotal = await prisma.jobApplication.count({
+		where: { created_at: { gte: thisMonthStart } },
+	});
+
 	return NextResponse.json({
-		data: { total, in_review: inReview, interviewed, got_offer: gotOffer },
+		data: {
+			total,
+			in_review: inReview,
+			interviewed,
+			got_offer: gotOffer,
+			diff: {
+				total: formatPctDiff(thisMonthTotal, totalLastMonth),
+				in_review: formatDiff(inReview, inReviewLastMonth),
+				interviewed: formatDiff(interviewed, interviewedLastMonth),
+				got_offer: formatDiff(gotOffer, gotOfferLastMonth),
+			},
+		},
 	});
 }
 
@@ -187,8 +253,11 @@ async function getList() {
 			applied_ago: timeAgo(app.created_at),
 			score_out_of_5: normalizeScore(app.resume.resume_analysis?.score),
 			status: deriveStatus(app),
+			resumeId: app.resume.id,
 		};
 	});
 
-	return NextResponse.json({ data: { applications: records, total: records.length } });
+	return NextResponse.json({
+		data: { applications: records, total: records.length },
+	});
 }
