@@ -27,6 +27,7 @@ import {
 import clsx from "clsx";
 import { apiClient } from "@/lib/apiClient";
 import PaginationBar from "@/shared/common/features/PaginationBar";
+import Link from "next/link";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,7 @@ type Candidate = {
 	appliedAgo: string;
 	rating: number | null;
 	status: CandidateStatus;
+	resumeId: number;
 };
 
 type ApiApplication = {
@@ -65,6 +67,7 @@ type ApiApplication = {
 	applied_ago: string;
 	score_out_of_5: number | null;
 	status: string;
+	resumeId: number;
 };
 
 type ApiSummary = {
@@ -72,6 +75,12 @@ type ApiSummary = {
 	in_review: number;
 	interviewed: number;
 	got_offer: number;
+	diff: {
+		total: string;
+		in_review: string;
+		interviewed: string;
+		got_offer: string;
+	};
 };
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -128,6 +137,7 @@ const MOCK_CANDIDATES: Candidate[] = [
 		appliedAgo: "Applied 2 days ago",
 		rating: 4.5,
 		status: "shortlisted",
+		resumeId: 1,
 	},
 	{
 		id: 2,
@@ -143,6 +153,7 @@ const MOCK_CANDIDATES: Candidate[] = [
 		appliedAgo: "Applied 1 day ago",
 		rating: 4.8,
 		status: "active",
+		resumeId: 2,
 	},
 	{
 		id: 3,
@@ -158,6 +169,7 @@ const MOCK_CANDIDATES: Candidate[] = [
 		appliedAgo: "Applied 3 days ago",
 		rating: 4.7,
 		status: "offer",
+		resumeId: 3,
 	},
 	{
 		id: 4,
@@ -173,6 +185,7 @@ const MOCK_CANDIDATES: Candidate[] = [
 		appliedAgo: "Applied 5 days ago",
 		rating: 4.3,
 		status: "interview",
+		resumeId: 4,
 	},
 	{
 		id: 5,
@@ -188,6 +201,7 @@ const MOCK_CANDIDATES: Candidate[] = [
 		appliedAgo: "Applied 1 week ago",
 		rating: 3.9,
 		status: "rejected",
+		resumeId: 5,
 	},
 ];
 
@@ -196,6 +210,7 @@ const DEFAULT_SUMMARY: ApiSummary = {
 	in_review: 0,
 	interviewed: 0,
 	got_offer: 0,
+	diff: { total: "+0", in_review: "+0", interviewed: "+0", got_offer: "+0" },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -244,6 +259,7 @@ function mapApiToCandidate(app: ApiApplication): Candidate {
 		appliedAgo: `Applied ${app.applied_ago}`,
 		rating: app.score_out_of_5,
 		status: mapApiStatus(app.status),
+		resumeId: app.resumeId,
 	};
 }
 
@@ -263,9 +279,9 @@ const CandidatesPage = () => {
 		setLoading(true);
 		try {
 			const [listRes, summaryRes] = await Promise.all([
-				apiClient.get<{ data: { applications: ApiApplication[]; total: number } }>(
-					"/api/candidate"
-				),
+				apiClient.get<{
+					data: { applications: ApiApplication[]; total: number };
+				}>("/api/candidate"),
 				apiClient.get<{ data: ApiSummary }>("/api/candidate?summary=1"),
 			]);
 
@@ -310,38 +326,41 @@ const CandidatesPage = () => {
 
 	const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
 	const safePage = Math.min(page, totalPages);
-	const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+	const paged = filtered.slice(
+		(safePage - 1) * PAGE_SIZE,
+		safePage * PAGE_SIZE
+	);
 
 	const statCards = [
 		{
 			label: "Total Candidates",
 			value: usingMock ? 156 : summary.total,
-			trend: "+16.6%",
-			trendUp: true,
+			trend: usingMock ? "+16.6%" : summary.diff.total,
+			trendUp: usingMock ? true : !summary.diff.total.startsWith("-"),
 			icon: <Users className="h-5 w-5 text-[#48BB78]" />,
 			iconBg: "bg-[#48BB7833]",
 		},
 		{
 			label: "In Review",
 			value: usingMock ? 42 : summary.in_review,
-			trend: "+85",
-			trendUp: true,
+			trend: usingMock ? "+85" : summary.diff.in_review,
+			trendUp: usingMock ? true : !summary.diff.in_review.startsWith("-"),
 			icon: <ClipboardCheck className="h-5 w-5 text-[#905DF8]" />,
 			iconBg: "bg-[#905DF833]",
 		},
 		{
 			label: "Interviewed",
 			value: usingMock ? 28 : summary.interviewed,
-			trend: "-3 days",
-			trendUp: false,
+			trend: usingMock ? "-3" : summary.diff.interviewed,
+			trendUp: usingMock ? false : !summary.diff.interviewed.startsWith("-"),
 			icon: <Calendar className="h-5 w-5 text-[#F6AD55]" />,
 			iconBg: "bg-[#F6AD5533]",
 		},
 		{
 			label: "Offers Sent",
 			value: usingMock ? 12 : summary.got_offer,
-			trend: "+163",
-			trendUp: true,
+			trend: usingMock ? "+163" : summary.diff.got_offer,
+			trendUp: usingMock ? true : !summary.diff.got_offer.startsWith("-"),
 			icon: <CircleCheck className="h-5 w-5 text-teal-600" />,
 			iconBg: "bg-[#48BB7833]",
 		},
@@ -531,9 +550,12 @@ const CandidatesPage = () => {
 											{statusCfg.label}
 										</span>
 									</div>
-									<button className="inline-flex items-center justify-center rounded-[10px] bg-[#005CA9] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#2D3748] transition-colors">
+									<Link
+										href={`/candidates/${candidate.resumeId}`}
+										className="inline-flex items-center justify-center rounded-[10px] bg-[#005CA9] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#2D3748] transition-colors"
+									>
 										View Profile
-									</button>
+									</Link>
 								</div>
 							</div>
 						);
