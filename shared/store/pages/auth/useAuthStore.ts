@@ -8,12 +8,24 @@ import {
 	resolveResponseMessage,
 } from "@/shared/helper/apiMessages";
 
+interface AdminData {
+	id: number;
+	email: string;
+	f_name: string;
+	l_name: string;
+	user_name: string;
+	profile_image_url: string | null;
+}
+
 interface IAuthStore {
 	isAuthenticated: boolean;
+	admin: AdminData | null;
+	loadingAdmin: boolean;
 	loadingLogin: boolean;
 	loadingResetRequest: boolean;
 	loadingResetVerify: boolean;
 	loadingResetConfirm: boolean;
+	fetchAdmin: () => Promise<void>;
 	login: (
 		email: string,
 		password: string,
@@ -35,6 +47,7 @@ interface IAuthStore {
 	resendVerificationToken: (token: string) => Promise<boolean>;
 }
 
+
 const useAuthStore = create<IAuthStore>((set) => {
 	const persistTokens = (
 		accessToken?: string | null,
@@ -54,6 +67,8 @@ const useAuthStore = create<IAuthStore>((set) => {
 
 	return {
 		isAuthenticated: false,
+		admin: null,
+		loadingAdmin: true,
 		loadingLogin: false,
 		loadingSignup: false,
 		loadingResetRequest: false,
@@ -63,6 +78,19 @@ const useAuthStore = create<IAuthStore>((set) => {
 			if (typeof window === "undefined") return;
 			persistTokens(accessToken ?? null, refreshToken ?? null);
 		},
+		fetchAdmin: async () => {
+			set({ loadingAdmin: true });
+			try {
+				const result = await apiClient.get("/api/admin/me");
+				const adminData: AdminData | null =
+					result.data?.data?.admin ?? null;
+				if (adminData) set({ admin: adminData });
+			} catch {
+				// silently fail — not critical
+			} finally {
+				set({ loadingAdmin: false });
+			}
+		},
 		login: async (email, password, options) => {
 			set({ loadingLogin: true });
 			try {
@@ -71,11 +99,13 @@ const useAuthStore = create<IAuthStore>((set) => {
 					password,
 				});
 				if (result.status === 200) {
-					set({ isAuthenticated: true });
 					const accessToken =
 						result.data?.access_token ?? result.data?.data?.access_token;
 					const refreshToken =
 						result.data?.refresh_token ?? result.data?.data?.refresh_token;
+					const adminData: AdminData | null =
+						result.data?.data?.admin ?? result.data?.admin ?? null;
+					set({ isAuthenticated: true, admin: adminData });
 					const shouldStore = options?.storeTokens !== false;
 					if (shouldStore && typeof window !== "undefined") {
 						persistTokens(accessToken ?? null, refreshToken ?? null);
@@ -199,6 +229,7 @@ const useAuthStore = create<IAuthStore>((set) => {
 			} finally {
 				Cookies.remove(ACCESS_TOKEN_KEY);
 				Cookies.remove(REFRESH_TOKEN_KEY);
+				set({ admin: null, isAuthenticated: false });
 				if (typeof window !== "undefined") {
 					localStorage.removeItem("access_token");
 					localStorage.removeItem("refresh_token");
