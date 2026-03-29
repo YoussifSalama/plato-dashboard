@@ -8,8 +8,6 @@ import {
 	PaginationEllipsis,
 	PaginationItem,
 	PaginationLink,
-	PaginationNext,
-	PaginationPrevious,
 } from "@/components/ui/pagination";
 
 type PageItem = number | "ellipsis";
@@ -68,6 +66,7 @@ const PaginationBar = ({
 	className,
 	totalItems,
 	itemName = "items",
+	pageSize = 15,
 }: {
 	currentPage: number;
 	totalPages: number;
@@ -76,17 +75,16 @@ const PaginationBar = ({
 	className?: string;
 	totalItems?: number;
 	itemName?: string;
+	pageSize?: number;
 }) => {
 	const items = buildPageItems(currentPage, totalPages, maxVisible);
 	const canGoPrev = currentPage > 1;
 	const canGoNext = currentPage < totalPages;
 
 	// Calculate showing range
-	const itemsPerPage = 15; // default limit based on ResumeClient
-	const showingStart =
-		totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+	const showingStart = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
 	const showingEnd = totalItems
-		? Math.min(currentPage * itemsPerPage, totalItems)
+		? Math.min(currentPage * pageSize, totalItems)
 		: 0;
 
 	const itemClassName = clsx(
@@ -126,19 +124,19 @@ const PaginationBar = ({
 			</div>
 
 			<Pagination className="mx-0 w-auto justify-end">
-				<PaginationContent className="gap-1.5 flex items-center">
+				<PaginationContent className="gap-2 flex items-center">
 					<PaginationItem>
-						<PaginationPrevious
-							href="#"
+						<button
+							disabled={!canGoPrev}
+							onClick={() => canGoPrev && onPageChange(currentPage - 1)}
 							className={clsx(
-								"pr-3 text-sm font-medium text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors bg-transparent border-0 hover:bg-transparent shadow-none px-0",
-								!canGoPrev && "pointer-events-none opacity-50"
+								itemClassName,
+								"w-auto px-3 border border-[#E2E8F0] text-[#718096] py-1 text-base hover:bg-[#084b82]! hover:text-white!",
+								!canGoPrev && "pointer-events-none opacity-40"
 							)}
-							onClick={(event) => {
-								event.preventDefault();
-								if (canGoPrev) onPageChange(currentPage - 1);
-							}}
-						/>
+						>
+							Previous
+						</button>
 					</PaginationItem>
 
 					{items.map((item, index) => {
@@ -172,17 +170,17 @@ const PaginationBar = ({
 					})}
 
 					<PaginationItem>
-						<PaginationNext
-							href="#"
+						<button
+							disabled={!canGoNext}
+							onClick={() => canGoNext && onPageChange(currentPage + 1)}
 							className={clsx(
-								"pl-3 text-sm font-medium text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors bg-transparent border-0 hover:bg-transparent shadow-none px-0",
-								!canGoNext && "pointer-events-none opacity-50"
+								itemClassName,
+								"w-auto px-3 border border-[#E2E8F0] text-[#718096] py-1 text-base hover:bg-[#084b82]! hover:text-white!",
+								!canGoNext && "pointer-events-none opacity-40"
 							)}
-							onClick={(event) => {
-								event.preventDefault();
-								if (canGoNext) onPageChange(currentPage + 1);
-							}}
-						/>
+						>
+							Next
+						</button>
 					</PaginationItem>
 				</PaginationContent>
 			</Pagination>
