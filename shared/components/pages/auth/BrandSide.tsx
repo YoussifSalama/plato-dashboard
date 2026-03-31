@@ -41,7 +41,7 @@ const BrandSide = () => {
 							className="object-contain xl:max-w-[107px] xl:max-h-[107px] max-w-[72px] max-h-[72px] invert brightness-0"
 						/>
 						<h1 className="font-bold xl:text-3xl text-xl  text-white leading-tight">
-							Plato Agency
+							Plato Super Admin Dashboard
 						</h1>
 					</div>
 
