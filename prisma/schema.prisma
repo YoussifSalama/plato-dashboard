@@ -688,28 +688,46 @@ model JobApplicationDocument {
   job_application    JobApplication @relation(fields: [job_application_id], references: [id], onDelete: Cascade)
 }
 
+// --- admin.prisma ---
 model Admin {
-  id                Int             @id @default(autoincrement())
-  email             String          @unique
-  f_name            String
-  l_name            String
-  user_name         String          @unique
-  verified          Boolean         @default(false)
+  id        Int     @id @default(autoincrement())
+  email     String  @unique
+  f_name    String
+  l_name    String
+  user_name String  @unique
+  verified  Boolean @default(false)
+
   profile_image_url String?
-  credential_id     Int             @unique
-  created_at        DateTime        @default(now())
-  updated_at        DateTime
-  AdminCredential   AdminCredential @relation(fields: [credential_id], references: [id], onDelete: Cascade)
-  AdminOtp          AdminOtp[]
-  AdminToken        AdminToken[]
+
+  credential_id Int             @unique
+  credential    AdminCredential @relation(fields: [credential_id], references: [id], onDelete: Cascade)
+
+  tokens AdminToken[]
+  otps   AdminOtp[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 }
 
 model AdminCredential {
-  id            Int      @id @default(autoincrement())
+  id            Int    @id @default(autoincrement())
   password_hash String
-  created_at    DateTime @default(now())
-  updated_at    DateTime
-  Admin         Admin?
+
+  admin Admin?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+model AdminToken {
+  id            Int    @id @default(autoincrement())
+  refresh_token String
+
+  admin_id Int
+  admin    Admin @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 }
 
 model AdminOtp {
@@ -718,19 +736,12 @@ model AdminOtp {
   purpose    OtpPurpose
   expires_at DateTime
   used_at    DateTime?
-  admin_id   Int
-  created_at DateTime   @default(now())
-  updated_at DateTime
-  Admin      Admin      @relation(fields: [admin_id], references: [id], onDelete: Cascade)
-}
 
-model AdminToken {
-  id            Int      @id @default(autoincrement())
-  refresh_token String
-  admin_id      Int
-  created_at    DateTime @default(now())
-  updated_at    DateTime
-  Admin         Admin    @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+  admin_id Int
+  admin    Admin @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 }
 
 enum ResumeFileTypes {
