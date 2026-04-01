@@ -47,12 +47,12 @@ export const sidebarRoutes: ISidebarRoute[] = [
 	{
 		label: "Subscriptions",
 		icon: CreditCard,
-		href: "/none1",
+		href: "/subscriptions",
 	},
 	{
 		label: "Qoutas",
 		icon: Gauge,
-		href: "/none2",
+		href: "/quotas",
 	},
 	{
 		label: "Vouchers",
