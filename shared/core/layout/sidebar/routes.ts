@@ -10,6 +10,8 @@ import {
 	ChartColumn,
 	FileText,
 	Gauge,
+	DatabaseBackup,
+	Database,
 } from "lucide-react";
 
 export interface ISidebarRoute {
@@ -57,17 +59,22 @@ export const sidebarRoutes: ISidebarRoute[] = [
 	{
 		label: "Vouchers",
 		icon: Gift,
-		href: "/none3",
+		href: "/vouchers",
 	},
 	{
 		label: "Content",
 		icon: FileText,
-		href: "/none4",
+		href: "/content",
 	},
 	{
 		label: "Analytics",
 		icon: ChartColumn,
-		href: "/none5",
+		href: "/analytics",
+	},
+	{
+		label: "Logs",
+		icon: Database,
+		href: "/logs",
 	},
 ];
 
