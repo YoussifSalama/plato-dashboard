@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
 	DollarSign,
 	CreditCard,
@@ -11,8 +12,15 @@ import {
 	Plus,
 	Trash2,
 	X,
+	ChevronDown,
 } from "lucide-react";
 import clsx from "clsx";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -136,7 +144,14 @@ type StatCardProps = {
 	diffUp: boolean;
 };
 
-const StatCard = ({ icon, iconBg, label, value, diff, diffUp }: StatCardProps) => (
+const StatCard = ({
+	icon,
+	iconBg,
+	label,
+	value,
+	diff,
+	diffUp,
+}: StatCardProps) => (
 	<div className="flex flex-col gap-3 rounded-2xl bg-white border border-slate-100 p-5 shadow-xs dark:border-slate-800 dark:bg-slate-950">
 		<div className="flex items-center justify-between">
 			<div
@@ -206,7 +221,7 @@ const EditPlanModal = ({ plan, onClose, onSave }: EditModalProps) => {
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-			<div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl dark:bg-slate-900 dark:border dark:border-slate-800 mx-4">
+			<div className="relative w-full max-w-lg rounded-2xl bg-white shadow-xl dark:bg-slate-900 dark:border dark:border-slate-800 mx-4">
 				{/* Header */}
 				<div className="flex items-start justify-between p-6 pb-4">
 					<div>
@@ -258,14 +273,39 @@ const EditPlanModal = ({ plan, onClose, onSave }: EditModalProps) => {
 							<label className="text-[12px] font-semibold text-slate-600 dark:text-slate-400">
 								Billing Period <span className="text-red-500">*</span>
 							</label>
-							<select
-								value={billingPeriod}
-								onChange={(e) => setBillingPeriod(e.target.value)}
-								className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-							>
-								<option value="month">Monthly</option>
-								<option value="year">Yearly</option>
-							</select>
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<button
+										type="button"
+										className="mt-1.5 flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-slate-800 hover:border-slate-300 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+									>
+										<span>
+											{billingPeriod === "month" ? "Monthly" : "Yearly"}
+										</span>
+										<ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+									</button>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent
+									align="start"
+									className="w-[--radix-dropdown-menu-trigger-width] rounded-xl p-1 dark:bg-slate-800 dark:border-slate-700"
+								>
+									{[
+										{ label: "Monthly", value: "month" },
+										{ label: "Yearly", value: "year" },
+									].map((opt) => (
+										<DropdownMenuItem
+											key={opt.value}
+											onClick={() => setBillingPeriod(opt.value)}
+											className="flex items-center justify-between rounded-lg text-[13px] cursor-pointer"
+										>
+											{opt.label}
+											{billingPeriod === opt.value && (
+												<Check className="h-3.5 w-3.5 text-blue-500" />
+											)}
+										</DropdownMenuItem>
+									))}
+								</DropdownMenuContent>
+							</DropdownMenu>
 						</div>
 					</div>
 
@@ -451,10 +491,7 @@ const SubscriptionsPage = () => {
 								className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl"
 								style={{ backgroundColor: plan.color + "20" }}
 							>
-								<CreditCard
-									className="h-5 w-5"
-									style={{ color: plan.color }}
-								/>
+								<CreditCard className="h-5 w-5" style={{ color: plan.color }} />
 							</div>
 
 							{/* Name & price */}
@@ -505,9 +542,12 @@ const SubscriptionsPage = () => {
 					<h3 className="text-[16px] font-bold text-slate-800 dark:text-slate-100">
 						Recent Transactions
 					</h3>
-					<button className="text-[13px] font-semibold text-blue-500 hover:text-blue-600 transition-colors">
+					<Link
+						href="/subscriptions/all"
+						className="text-[13px] font-semibold text-blue-500 hover:text-blue-600 transition-colors"
+					>
 						View All
-					</button>
+					</Link>
 				</div>
 
 				<table className="w-full">
@@ -538,9 +578,7 @@ const SubscriptionsPage = () => {
 								<td className="py-3.5 text-[13px] font-semibold text-slate-700 dark:text-slate-300">
 									{tx.amount}
 								</td>
-								<td className="py-3.5 text-[13px] text-slate-400">
-									{tx.date}
-								</td>
+								<td className="py-3.5 text-[13px] text-slate-400">{tx.date}</td>
 								<td className="py-3.5">
 									<StatusBadge status={tx.status} />
 								</td>
