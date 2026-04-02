@@ -252,7 +252,7 @@ const AdjustModal = ({ company, onClose, onSave }: ModalProps) => {
 								/>
 								<button
 									onClick={() => setUnlimited(key)}
-									className="shrink-0 rounded-xl border border-blue-200 px-3 py-2.5 text-[12px] font-semibold text-blue-500 hover:bg-blue-50 transition-colors dark:border-blue-800 dark:hover:bg-blue-950/30"
+									className="shrink-0 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[12px] font-semibold text-emerald-600 transition-colors hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-400 dark:hover:bg-emerald-950/60"
 								>
 									Unlimited
 								</button>
