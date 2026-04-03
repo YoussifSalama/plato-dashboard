@@ -20,6 +20,7 @@ export type JobListItem = {
     is_auto_deactivated?: boolean;
     auto_deactivate_at?: string;
     created_at?: string;
+    applicants_count?: number;
 };
 
 export type JobPaginationMeta = {
