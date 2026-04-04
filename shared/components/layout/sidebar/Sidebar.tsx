@@ -128,7 +128,12 @@ const Sidebar = ({
 									href={
 										route.href.includes("/none") ? `${pathname}` : route.href
 									}
-									className="group flex items-center gap-4 py-2 text-[15px] font-medium text-slate-500 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+									className={clsx(
+										"group flex items-center gap-4 py-3.5 text-[15px] font-medium transition-colors relative rounded-[20px] pl-8",
+										pathname === route.href
+											? "bg-[#005ca9] text-white shadow-sm"
+											: "text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900/50 dark:hover:text-slate-100"
+									)}
 								>
 									<Icon className="h-5 w-5" strokeWidth={2.2} />
 									<span>{route.label}</span>
