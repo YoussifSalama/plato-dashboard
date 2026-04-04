@@ -10,6 +10,8 @@ import {
 	X,
 	RotateCcw,
 	SlidersHorizontal,
+	Plus,
+	ChevronDown,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -294,6 +296,175 @@ const AdjustModal = ({ company, onClose, onSave }: ModalProps) => {
 	);
 };
 
+// ─── Add Credits Modal ────────────────────────────────────────────────────────
+
+const CREDIT_TYPES = [
+	{ label: "Job Posts", value: "jobPosts" },
+	{ label: "Candidate Views", value: "candidates" },
+	{ label: "Messages", value: "messages" },
+	{ label: "CV Downloads", value: "downloads" },
+];
+
+const AddCreditsModal = ({
+	company,
+	onClose,
+}: {
+	company: Company;
+	onClose: () => void;
+}) => {
+	const [creditType, setCreditType] = useState("");
+	const [amount, setAmount] = useState("");
+	const [typeOpen, setTypeOpen] = useState(false);
+
+	const selectedType = CREDIT_TYPES.find((t) => t.value === creditType);
+
+	const quickAdd = (n: number) =>
+		setAmount((prev) => String((parseInt(prev) || 0) + n));
+
+	const canSubmit = creditType && parseInt(amount) > 0;
+
+	const usageRows = [
+		{ label: "Job Posts", used: company.usage.jobPosts, limit: company.limits.jobPosts },
+		{ label: "Profile Views", used: company.usage.candidates, limit: company.limits.candidates },
+		{ label: "Messages", used: company.usage.messages, limit: company.limits.messages },
+		{ label: "Downloads", used: company.usage.downloads, limit: company.limits.downloads },
+	];
+
+	return (
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+			<div className="relative w-full max-w-sm rounded-2xl bg-white shadow-xl dark:bg-slate-900 dark:border dark:border-slate-800 mx-4">
+				{/* Header */}
+				<div className="flex items-start justify-between px-6 pt-6 pb-4">
+					<div>
+						<h2 className="text-[17px] font-bold text-slate-900 dark:text-slate-50">
+							Add Credits
+						</h2>
+						<p className="text-[12px] text-slate-400 mt-0.5">
+							{company.name} &middot; {company.plan}
+						</p>
+					</div>
+					<button
+						onClick={onClose}
+						className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors dark:hover:bg-slate-800"
+					>
+						<X className="h-4 w-4" />
+					</button>
+				</div>
+
+				<div className="px-6 pb-6 space-y-4">
+					{/* Current Usage */}
+					<div className="rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/50">
+						<p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-3 uppercase tracking-wider">
+							Current Usage
+						</p>
+						<div className="grid grid-cols-2 gap-3">
+							{usageRows.map((row) => (
+								<div key={row.label}>
+									<p className="text-[10px] text-slate-400 mb-0.5">{row.label}</p>
+									<p className="text-[15px] font-bold text-slate-800 dark:text-slate-100">
+										{fmtNum(row.used)}/{row.limit ? fmtNum(row.limit) : "∞"}
+									</p>
+								</div>
+							))}
+						</div>
+					</div>
+
+					{/* Credit Type */}
+					<div className="relative">
+						<label className="text-[12px] font-semibold text-slate-600 dark:text-slate-400">
+							Credit Type
+						</label>
+						<button
+							type="button"
+							onClick={() => setTypeOpen((p) => !p)}
+							className="mt-1.5 flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-left outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800"
+						>
+							<span className={creditType ? "text-slate-800 dark:text-slate-100" : "text-slate-300"}>
+								{selectedType?.label ?? "Select credit type"}
+							</span>
+							<ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
+						</button>
+						{typeOpen && (
+							<div className="absolute z-10 mt-1 w-full rounded-xl border border-slate-100 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900 overflow-hidden">
+								{CREDIT_TYPES.map((t) => (
+									<button
+										key={t.value}
+										type="button"
+										onClick={() => { setCreditType(t.value); setTypeOpen(false); }}
+										className={clsx(
+											"w-full px-3 py-2.5 text-left text-[13px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors",
+											creditType === t.value
+												? "font-semibold text-[#005ca9]"
+												: "text-slate-700 dark:text-slate-200"
+										)}
+									>
+										{t.label}
+									</button>
+								))}
+							</div>
+						)}
+					</div>
+
+					{/* Credit Amount */}
+					<div>
+						<label className="text-[12px] font-semibold text-slate-600 dark:text-slate-400">
+							Credit Amount
+						</label>
+						<input
+							type="number"
+							min={1}
+							placeholder="Enter credit amount to add"
+							value={amount}
+							onChange={(e) => setAmount(e.target.value)}
+							className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-slate-800 placeholder:text-slate-300 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+						/>
+						<p className="mt-1 text-[11px] text-slate-400">
+							This will add extra credits to the user&apos;s current limit
+						</p>
+					</div>
+
+					{/* Quick Add */}
+					<div>
+						<p className="text-[12px] font-semibold text-slate-600 dark:text-slate-400 mb-2">
+							Quick Add
+						</p>
+						<div className="grid grid-cols-4 gap-2">
+							{[5, 10, 25, 50].map((n) => (
+								<button
+									key={n}
+									type="button"
+									onClick={() => quickAdd(n)}
+									className="rounded-xl border border-slate-200 bg-white py-2 text-[13px] font-semibold text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-[#005ca9] transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+								>
+									+{n}
+								</button>
+							))}
+						</div>
+					</div>
+
+					{/* Actions */}
+					<div className="flex items-center justify-end gap-2 pt-1">
+						<button
+							onClick={onClose}
+							className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+						>
+							Cancel
+						</button>
+						<button
+							disabled={!canSubmit}
+							onClick={onClose}
+							className="inline-flex items-center gap-1.5 rounded-xl bg-[#005ca9] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#004e8f] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+						>
+							<Plus className="h-3.5 w-3.5" />
+							Add Credits
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+};
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 type TabKey = "company" | "candidate";
@@ -301,6 +472,7 @@ type TabKey = "company" | "candidate";
 const QuotasPage = () => {
 	const [companies, setCompanies] = useState<Company[]>(MOCK_COMPANIES);
 	const [adjusting, setAdjusting] = useState<Company | null>(null);
+	const [addingCredits, setAddingCredits] = useState<Company | null>(null);
 	const [activeTab, setActiveTab] = useState<TabKey>("company");
 	const [search, setSearch] = useState("");
 
@@ -556,6 +728,13 @@ const QuotasPage = () => {
 												<td className="py-4">
 													<div className="flex items-center gap-2">
 														<button
+															onClick={() => setAddingCredits(c)}
+															className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-600 hover:border-emerald-200 hover:text-emerald-600 transition-colors dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-emerald-400 whitespace-nowrap"
+														>
+															<Plus className="h-3 w-3" />
+															Add Credits
+														</button>
+														<button
 															onClick={() => setAdjusting(c)}
 															className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-600 hover:border-blue-200 hover:text-[#005ca9] transition-colors dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-blue-400 whitespace-nowrap"
 														>
@@ -588,12 +767,18 @@ const QuotasPage = () => {
 				)}
 			</div>
 
-			{/* Modal */}
+			{/* Modals */}
 			{adjusting && (
 				<AdjustModal
 					company={adjusting}
 					onClose={() => setAdjusting(null)}
 					onSave={handleSave}
+				/>
+			)}
+			{addingCredits && (
+				<AddCreditsModal
+					company={addingCredits}
+					onClose={() => setAddingCredits(null)}
 				/>
 			)}
 		</section>

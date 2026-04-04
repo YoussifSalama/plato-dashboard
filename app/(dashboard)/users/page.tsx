@@ -36,9 +36,7 @@ import {
 import clsx from "clsx";
 import { apiClient } from "@/lib/apiClient";
 import { errorToast, successToast } from "@/shared/helper/toast";
-import {
-	resolveErrorMessage,
-} from "@/shared/helper/apiMessages";
+import { resolveErrorMessage } from "@/shared/helper/apiMessages";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -149,8 +147,11 @@ const UsersPage = () => {
 					users: ApiUser[];
 				};
 			}>("/api/user");
-			const { users: apiUsers, total_companies, total_candidates } =
-				res.data.data;
+			const {
+				users: apiUsers,
+				total_companies,
+				total_candidates,
+			} = res.data.data;
 			setUsers(apiUsers.map(mapToListItem));
 			setTotalCompanies(total_companies);
 			setTotalCandidates(total_candidates);
@@ -171,8 +172,15 @@ const UsersPage = () => {
 		e.preventDefault();
 		setSubmitting(true);
 		try {
-			const { type, name, email, phone, location, subscription_plan, password } =
-				form;
+			const {
+				type,
+				name,
+				email,
+				phone,
+				location,
+				subscription_plan,
+				password,
+			} = form;
 
 			const common = {
 				email,
@@ -226,15 +234,12 @@ const UsersPage = () => {
 		if (!editingUser) return;
 		setEditSubmitting(true);
 		try {
-			await apiClient.patch(
-				`/api/user/${editingUser.type}/${editingUser.id}`,
-				{
-					email: editForm.email,
-					f_name: editForm.f_name,
-					l_name: editForm.l_name || undefined,
-					verified: editForm.verified,
-				}
-			);
+			await apiClient.patch(`/api/user/${editingUser.type}/${editingUser.id}`, {
+				email: editForm.email,
+				f_name: editForm.f_name,
+				l_name: editForm.l_name || undefined,
+				verified: editForm.verified,
+			});
 			successToast("User updated.");
 			setEditModalOpen(false);
 			setEditingUser(null);
@@ -521,7 +526,8 @@ const UsersPage = () => {
 												setForm((p) => ({
 													...p,
 													type: t,
-													subscription_plan: t === "candidate" ? "" : p.subscription_plan,
+													subscription_plan:
+														t === "candidate" ? "" : p.subscription_plan,
 												}))
 											}
 											className={clsx(
@@ -648,13 +654,13 @@ const UsersPage = () => {
 									}
 								>
 									<option value="">Select a plan</option>
-									{(["STARTER", "GROWTH", "PRO", "EXTRA", "CUSTOM"] as const).map(
-										(plan) => (
-											<option key={plan} value={plan}>
-												{plan.charAt(0) + plan.slice(1).toLowerCase()} Plan
-											</option>
-										)
-									)}
+									{(
+										["STARTER", "GROWTH", "PRO", "EXTRA", "CUSTOM"] as const
+									).map((plan) => (
+										<option key={plan} value={plan}>
+											{plan.charAt(0) + plan.slice(1).toLowerCase()} Plan
+										</option>
+									))}
 								</select>
 							</div>
 						)}

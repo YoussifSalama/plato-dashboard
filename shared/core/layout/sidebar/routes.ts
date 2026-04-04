@@ -82,7 +82,7 @@ export const bottomRoutes: ISidebarRoute[] = [
 	{
 		label: "Settings",
 		icon: Settings,
-		href: "/none6",
+		href: "/settings",
 	},
 	// {
 	// 	label: "Help Center",
