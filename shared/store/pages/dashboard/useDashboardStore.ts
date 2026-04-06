@@ -81,7 +81,7 @@ interface DashboardStore {
 	dashboard: AgencyDashboardData | null;
 	loading: boolean;
 	getDashboard: (
-		accountId: string | number
+		accountId?: string | number
 	) => Promise<AgencyDashboardData | null>;
 	clear: () => void;
 }
@@ -90,6 +90,7 @@ const useDashboardStore = create<DashboardStore>((set) => ({
 	dashboard: null,
 	loading: false,
 	getDashboard: async (accountId) => {
+		if (!accountId) return null;
 		const token = await getAgencyToken(accountId);
 		if (!token) return null;
 		set({ loading: true });
