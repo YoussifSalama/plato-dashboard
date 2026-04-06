@@ -1,5 +1,12 @@
 import { create } from "zustand";
 import { apiClient } from "@/lib/apiClient";
+import axios from "axios";
+import { SignJWT } from "jose";
+import { errorToast, successToast } from "@/shared/helper/toast";
+import {
+	resolveErrorMessage,
+	resolveResponseMessage,
+} from "@/shared/helper/apiMessages";
 
 export type ResumeAnalysisStrength = {
 	title: string;
@@ -265,12 +272,22 @@ interface ResumeDetailsStore {
 	error: string | null;
 	actionLoading: "deny" | "shortlist" | "invite" | null;
 	getResume: (id: number | string) => Promise<void>;
-	// denyResume: (id: number | string, value: boolean) => Promise<void>;
-	// shortlistResume: (id: number | string, value: boolean) => Promise<void>;
-	// inviteResume: (id: number | string) => Promise<void>;
+	denyResume: (
+		id: number | string,
+		value: boolean,
+		accountId: number | string
+	) => Promise<void>;
+	shortlistResume: (
+		id: number | string,
+		value: boolean,
+		accountId: number | string
+	) => Promise<void>;
+	inviteResume: (
+		id: number | string,
+		accountId: number | string
+	) => Promise<void>;
 	clear: () => void;
 }
-
 
 const asString = (value: unknown): string | undefined =>
 	typeof value === "string" ? value : undefined;
@@ -731,77 +748,113 @@ export const useResumeDetailsStore = create<ResumeDetailsStore>((set) => ({
 			});
 		}
 	},
-	// denyResume: async (id: number | string, value: boolean) => {
-	//     const token = getToken();
-	//     if (!token) return;
-	//     const requestId = typeof id === "string" ? id.trim() : id;
-	//     set({ actionLoading: "deny" });
-	//     try {
-	//         const response = await apiClient.patch(
-	//             `/resume/${requestId}/deny`,
-	//             { auto_denied: value },
-	//             { headers: { Authorization: `Bearer ${token}` } },
-	//         );
-	//         const updated = response.data?.data ?? null;
-	//         if (updated) {
-	//             set((state) => ({
-	//                 resume: state.resume ? { ...state.resume, ...updated } : state.resume,
-	//             }));
-	//         }
-	//         successToast(resolveResponseMessage(response, value ? "Resume denied successfully." : "Resume denial removed successfully."));
-	//     } catch (error) {
-	//         errorToast(resolveErrorMessage(error, "Failed to update resume."));
-	//     } finally {
-	//         set({ actionLoading: null });
-	//     }
-	// },
-	// shortlistResume: async (id: number | string, value: boolean) => {
-	//     const token = getToken();
-	//     if (!token) return;
-	//     const requestId = typeof id === "string" ? id.trim() : id;
-	//     set({ actionLoading: "shortlist" });
-	//     try {
-	//         const response = await apiClient.patch(
-	//             `/resume/${requestId}/shortlist`,
-	//             { auto_shortlisted: value },
-	//             { headers: { Authorization: `Bearer ${token}` } },
-	//         );
-	//         const updated = response.data?.data ?? null;
-	//         if (updated) {
-	//             set((state) => ({
-	//                 resume: state.resume ? { ...state.resume, ...updated } : state.resume,
-	//             }));
-	//         }
-	//         successToast(resolveResponseMessage(response, value ? "Resume shortlisted successfully." : "Resume removed from shortlist successfully."));
-	//     } catch (error) {
-	//         errorToast(resolveErrorMessage(error, "Failed to update resume."));
-	//     } finally {
-	//         set({ actionLoading: null });
-	//     }
-	// },
-	// inviteResume: async (id: number | string) => {
-	//     const token = getToken();
-	//     if (!token) return;
-	//     const requestId = typeof id === "string" ? id.trim() : id;
-	//     set({ actionLoading: "invite" });
-	//     try {
-	//         const response = await apiClient.post(
-	//             `/resume/${requestId}/invite`,
-	//             {},
-	//             { headers: { Authorization: `Bearer ${token}` } },
-	//         );
-	//         const updated = response.data?.data ?? null;
-	//         if (updated) {
-	//             set((state) => ({
-	//                 resume: state.resume ? { ...state.resume, ...updated } : state.resume,
-	//             }));
-	//         }
-	//         successToast(resolveResponseMessage(response, "Invitation sent successfully."));
-	//     } catch (error) {
-	//         errorToast(resolveErrorMessage(error, "Failed to send invitation."));
-	//     } finally {
-	//         set({ actionLoading: null });
-	//     }
-	// },
+	denyResume: async (
+		id: number | string,
+		value: boolean,
+		accountId: number | string
+	) => {
+		const token = new SignJWT({ id: accountId, provider: "agency" })
+			.setProtectedHeader({ alg: "HS256" })
+			.setExpirationTime("15m")
+			.setIssuedAt()
+			.sign(new TextEncoder().encode(process.env.JWT_ACCESS_SECRET));
+		if (!token) return;
+		const requestId = typeof id === "string" ? id.trim() : id;
+		set({ actionLoading: "deny" });
+		try {
+			const response = await axios.patch(
+				`${process.env.NEXT_PUBLIC_BACKEND_URL}/resume/${requestId}/deny`,
+				{ auto_denied: value },
+				{ headers: { Authorization: `Bearer ${token}` } }
+			);
+			const updated = response.data?.data ?? null;
+			if (updated) {
+				set((state) => ({
+					resume: state.resume ? { ...state.resume, ...updated } : state.resume,
+				}));
+			}
+			successToast(
+				resolveResponseMessage(
+					response,
+					value
+						? "Resume denied successfully."
+						: "Resume denial removed successfully."
+				)
+			);
+		} catch (error) {
+			errorToast(resolveErrorMessage(error, "Failed to update resume."));
+		} finally {
+			set({ actionLoading: null });
+		}
+	},
+	shortlistResume: async (
+		id: number | string,
+		value: boolean,
+		accountId: number | string
+	) => {
+		const token = new SignJWT({ id: accountId, provider: "agency" })
+			.setProtectedHeader({ alg: "HS256" })
+			.setExpirationTime("15m")
+			.setIssuedAt()
+			.sign(new TextEncoder().encode(process.env.JWT_ACCESS_SECRET));
+		if (!token) return;
+		const requestId = typeof id === "string" ? id.trim() : id;
+		set({ actionLoading: "shortlist" });
+		try {
+			const response = await axios.patch(
+				`${process.env.NEXT_PUBLIC_BACKEND_URL}/resume/${requestId}/shortlist`,
+				{ auto_shortlisted: value },
+				{ headers: { Authorization: `Bearer ${token}` } }
+			);
+			const updated = response.data?.data ?? null;
+			if (updated) {
+				set((state) => ({
+					resume: state.resume ? { ...state.resume, ...updated } : state.resume,
+				}));
+			}
+			successToast(
+				resolveResponseMessage(
+					response,
+					value
+						? "Resume shortlisted successfully."
+						: "Resume removed from shortlist successfully."
+				)
+			);
+		} catch (error) {
+			errorToast(resolveErrorMessage(error, "Failed to update resume."));
+		} finally {
+			set({ actionLoading: null });
+		}
+	},
+	inviteResume: async (id: number | string, accountId: number | string) => {
+		const token = new SignJWT({ id: accountId, provider: "agency" })
+			.setProtectedHeader({ alg: "HS256" })
+			.setExpirationTime("15m")
+			.setIssuedAt()
+			.sign(new TextEncoder().encode(process.env.JWT_ACCESS_SECRET));
+		if (!token) return;
+		const requestId = typeof id === "string" ? id.trim() : id;
+		set({ actionLoading: "invite" });
+		try {
+			const response = await axios.post(
+				`${process.env.NEXT_PUBLIC_BACKEND_URL}/resume/${requestId}/invite`,
+				{},
+				{ headers: { Authorization: `Bearer ${token}` } }
+			);
+			const updated = response.data?.data ?? null;
+			if (updated) {
+				set((state) => ({
+					resume: state.resume ? { ...state.resume, ...updated } : state.resume,
+				}));
+			}
+			successToast(
+				resolveResponseMessage(response, "Invitation sent successfully.")
+			);
+		} catch (error) {
+			errorToast(resolveErrorMessage(error, "Failed to send invitation."));
+		} finally {
+			set({ actionLoading: null });
+		}
+	},
 	clear: () => set({ resume: null, loading: false, error: null }),
 }));

@@ -1,16 +1,16 @@
-import Cookies from "js-cookie";
 import { create } from "zustand";
-import { apiClient } from "@/lib/apiClient";
-import { ACCESS_TOKEN_KEY } from "@/lib/authTokens";
 import { errorToast, successToast } from "@/shared/helper/toast";
 import {
 	resolveErrorMessage,
 	resolveResponseMessage,
 } from "@/shared/helper/apiMessages";
-import type {
-	IResume,
-	IPaginationMeta,
+import {
+	type IResume,
+	type IPaginationMeta,
+	getAgencyToken,
+	BackendApiClient,
 } from "@/shared/store/pages/resume/useResumeStore";
+import { apiClient } from "@/lib/apiClient";
 
 export type JobListItem = {
 	id: number;
@@ -27,7 +27,20 @@ export type JobListItem = {
 	auto_deactivate_at?: string;
 	created_at?: string;
 	applicants_count?: number;
+	agency_id?: number;
+	company_name?: string | null;
+	account_id?: number | null;
 };
+
+export type CompanyOption = {
+	id: number;
+	company_name: string | null;
+	company_industry?: string | null;
+	company_size?: string | null;
+	account_id: number;
+};
+
+export type AdminCreateJobPayload = CreateJobPayload & { agency_id: number };
 
 export type JobPaginationMeta = {
 	total: number;
@@ -190,6 +203,9 @@ interface IJobStore {
 	loadingDeleteJob: boolean;
 	jobApplications: JobApplication[];
 	loadingJobApplications: boolean;
+	// Admin-specific state
+	companies: CompanyOption[];
+	loadingCompanies: boolean;
 	resumeActionLoading: {
 		id: number | string;
 		type: "deny" | "shortlist" | "invite" | "ai-call";
@@ -198,18 +214,18 @@ interface IJobStore {
 		partial_matching: string,
 		sort_by: string,
 		sort_order: string,
+		accountId: string | number,
 		page: number,
 		is_active?: boolean | null,
-		industry?: string | null,
-		accessToken?: string | null
+		industry?: string | null
 	) => Promise<void>;
 	searchJobs: (
 		partial_matching: string,
-		accessToken?: string | null
+		accountId: string | number
 	) => Promise<void>;
 	getJobById: (
 		id: number,
-		accessToken?: string | null
+		accountId: string | number
 	) => Promise<JobDetail | null>;
 	getJobResumes: (
 		id: number,
@@ -217,77 +233,87 @@ interface IJobStore {
 		sort_by: string,
 		sort_order: string,
 		page: number,
+		accountId: string | number,
 		recommendation?: string | null,
 		score?: string | number | null,
 		autoInvited?: boolean | null,
 		autoShortlisted?: boolean | null,
-		autoDenied?: boolean | null,
-		accessToken?: string | null
+		autoDenied?: boolean | null
 	) => Promise<void>;
 	denyJobResume: (
 		id: number | string,
 		value: boolean,
-		accessToken?: string | null
+		accountId: string | number
 	) => Promise<void>;
 	shortlistJobResume: (
 		id: number | string,
 		value: boolean,
-		accessToken?: string | null
+		accountId: string | number
 	) => Promise<void>;
 	inviteJobResume: (
 		id: number | string,
-		accessToken?: string | null
+		accountId: string | number
 	) => Promise<void>;
 	scheduleJobResumeAiCall: (
 		id: number | string,
-		scheduledAt?: string | null,
-		accessToken?: string | null
+		accountId: string | number,
+		scheduledAt?: string | null
 	) => Promise<void>;
 	createJob: (
 		payload: CreateJobPayload,
-		accessToken?: string | null
+		accountId: string | number
 	) => Promise<JobListItem | null>;
 	updateJob: (
 		id: number,
 		payload: CreateJobPayload,
-		accessToken?: string | null
+		accountId: string | number
 	) => Promise<JobDetail | null>;
-	deleteJob: (id: number, accessToken?: string | null) => Promise<boolean>;
+	deleteJob: (id: number, accountId: string | number) => Promise<boolean>;
 	setJobActiveStatus: (
 		id: number,
 		isActive: boolean,
-		accessToken?: string | null
+		accountId: string | number
 	) => Promise<boolean>;
 	createJobAiPrompt: (
 		payload: CreateJobAiPromptPayload,
-		accessToken?: string | null
+		accountId: string | number
 	) => Promise<boolean>;
 	upsertJobAiPrompt: (
 		id: number,
 		payload: CreateJobAiPromptPayload,
-		accessToken?: string | null
+		accountId: string | number
 	) => Promise<boolean>;
 	generateJobContent: (
 		payload: GenerateJobAiPayload,
-		accessToken?: string | null
+		accountId: string | number
 	) => Promise<{ description: string; requirements: string } | null>;
-	getJobApplications: (
-		id: number,
-		accessToken?: string | null
-	) => Promise<void>;
+	getJobApplications: (id: number, accountId: string | number) => Promise<void>;
 	sendDirectInterview: (
 		candidateId: number,
 		jobId: number,
 		resumeId: number,
-		accessToken?: string | null
+		accountId: string | number
 	) => Promise<void>;
+	// Admin-specific methods (call Next.js API routes, not agency backend)
+	getAdminJobs: (
+		search: string,
+		sort_by: string,
+		sort_order: string,
+		page: number,
+		industry?: string | null,
+		employment_type?: string | null
+	) => Promise<void>;
+	createAdminJob: (
+		payload: AdminCreateJobPayload
+	) => Promise<JobListItem | null>;
+	getAdminJobById: (id: number) => Promise<JobDetail | null>;
+	updateAdminJob: (
+		id: number,
+		payload: CreateJobPayload
+	) => Promise<JobDetail | null>;
+	deleteAdminJob: (id: number) => Promise<boolean>;
+	getCompanies: (search?: string) => Promise<void>;
 }
-
-const getToken = (accessToken?: string | null) => {
-	if (accessToken) return accessToken;
-	if (typeof window === "undefined") return null;
-	return Cookies.get(ACCESS_TOKEN_KEY) ?? null;
-};
 
 export const useJobStore = create<IJobStore>((set, get) => ({
 	jobs: [],
@@ -312,16 +338,18 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 	jobApplications: [],
 	loadingJobApplications: false,
 	resumeActionLoading: null,
+	companies: [],
+	loadingCompanies: false,
 	getJobs: async (
-		partial_matching,
-		sort_by,
-		sort_order,
-		page,
-		is_active,
-		industry,
-		accessToken
+		partial_matching: string,
+		sort_by: string,
+		sort_order: string,
+		accountId: string | number,
+		page: number,
+		is_active?: boolean | null,
+		industry?: string | null
 	) => {
-		const token = getToken(accessToken);
+		const token = await getAgencyToken(accountId);
 		if (!token) return;
 		set({ loadingJobs: true });
 		try {
@@ -335,7 +363,7 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			if (typeof is_active === "boolean") {
 				params.is_active = is_active;
 			}
-			const response = await apiClient.get("/agency/jobs", {
+			const response = await BackendApiClient.get("/agency/jobs", {
 				headers: { Authorization: `Bearer ${token}` },
 				params,
 			});
@@ -360,12 +388,14 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			set({ loadingJobs: false });
 		}
 	},
-	searchJobs: async (partial_matching, accessToken) => {
-		const token = getToken(accessToken);
+	searchJobs: async (partial_matching, accountId) => {
+		console.log("accountId", accountId);
+		const token = await getAgencyToken(accountId);
+		console.log("token", token);
 		if (!token) return;
 		set({ loadingJobSearch: true });
 		try {
-			const response = await apiClient.get("/agency/jobs/search", {
+			const response = await BackendApiClient.get("/agency/jobs/search", {
 				headers: { Authorization: `Bearer ${token}` },
 				params: {
 					partial_matching,
@@ -381,12 +411,12 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			set({ loadingJobSearch: false });
 		}
 	},
-	getJobById: async (id, accessToken) => {
-		const token = getToken(accessToken);
+	getJobById: async (id, accountId) => {
+		const token = await getAgencyToken(accountId);
 		if (!token) return null;
 		set({ loadingJob: true });
 		try {
-			const response = await apiClient.get(`/agency/jobs/${id}`, {
+			const response = await BackendApiClient.get(`/agency/jobs/${id}`, {
 				headers: { Authorization: `Bearer ${token}` },
 			});
 			const job = (response.data?.data ?? response.data) as JobDetail;
@@ -399,19 +429,20 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 		}
 	},
 	getJobResumes: async (
-		id,
-		partial_matching,
-		sort_by,
-		sort_order,
-		page,
-		recommendation,
-		score,
-		autoInvited,
-		autoShortlisted,
-		autoDenied,
-		accessToken
+		id: number,
+		partial_matching: string,
+		sort_by: string,
+		sort_order: string,
+		page: number,
+		accountId: string | number,
+		recommendation?: string | null,
+		score?: string | number | null,
+		autoInvited?: boolean | null,
+		autoShortlisted?: boolean | null,
+		autoDenied?: boolean | null
 	) => {
-		const token = getToken(accessToken);
+		const token = await getAgencyToken(accountId);
+		console.log("token", token);
 		if (!token) return;
 		set({ loadingJobResumes: true });
 		try {
@@ -443,10 +474,13 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			if (typeof autoDenied === "boolean") {
 				params.auto_denied = autoDenied;
 			}
-			const response = await apiClient.get(`/agency/jobs/${id}/resumes`, {
-				headers: { Authorization: `Bearer ${token}` },
-				params,
-			});
+			const response = await BackendApiClient.get(
+				`/agency/jobs/${id}/resumes`,
+				{
+					headers: { Authorization: `Bearer ${token}` },
+					params,
+				}
+			);
 			const jobResumes = (response.data?.data ??
 				response.data ??
 				[]) as IResume[];
@@ -458,12 +492,12 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			set({ loadingJobResumes: false });
 		}
 	},
-	denyJobResume: async (id, value, accessToken) => {
-		const token = getToken(accessToken);
+	denyJobResume: async (id, value, accountId) => {
+		const token = await getAgencyToken(accountId);
 		if (!token) return;
 		set({ resumeActionLoading: { id, type: "deny" } });
 		try {
-			const response = await apiClient.patch(
+			const response = await BackendApiClient.patch(
 				`/resume/${id}/deny`,
 				{ auto_denied: value },
 				{ headers: { Authorization: `Bearer ${token}` } }
@@ -492,12 +526,12 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			set({ resumeActionLoading: null });
 		}
 	},
-	shortlistJobResume: async (id, value, accessToken) => {
-		const token = getToken(accessToken);
+	shortlistJobResume: async (id, value, accountId) => {
+		const token = await getAgencyToken(accountId);
 		if (!token) return;
 		set({ resumeActionLoading: { id, type: "shortlist" } });
 		try {
-			const response = await apiClient.patch(
+			const response = await BackendApiClient.patch(
 				`/resume/${id}/shortlist`,
 				{ auto_shortlisted: value },
 				{ headers: { Authorization: `Bearer ${token}` } }
@@ -526,12 +560,12 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			set({ resumeActionLoading: null });
 		}
 	},
-	inviteJobResume: async (id, accessToken) => {
-		const token = getToken(accessToken);
+	inviteJobResume: async (id, accountId) => {
+		const token = await getAgencyToken(accountId);
 		if (!token) return;
 		set({ resumeActionLoading: { id, type: "invite" } });
 		try {
-			const response = await apiClient.post(
+			const response = await BackendApiClient.post(
 				`/resume/${id}/invite`,
 				{},
 				{ headers: { Authorization: `Bearer ${token}` } }
@@ -555,12 +589,16 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			set({ resumeActionLoading: null });
 		}
 	},
-	scheduleJobResumeAiCall: async (id, scheduledAt, accessToken) => {
-		const token = getToken(accessToken);
+	scheduleJobResumeAiCall: async (
+		id: number | string,
+		accountId: string | number,
+		scheduledAt?: string | null
+	) => {
+		const token = await getAgencyToken(accountId);
 		if (!token) return;
 		set({ resumeActionLoading: { id, type: "ai-call" } });
 		try {
-			const response = await apiClient.post(
+			const response = await BackendApiClient.post(
 				`/resume/${id}/ai-call`,
 				scheduledAt ? { scheduledAt } : {},
 				{ headers: { Authorization: `Bearer ${token}` } }
@@ -574,12 +612,12 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			set({ resumeActionLoading: null });
 		}
 	},
-	createJob: async (payload, accessToken) => {
-		const token = getToken(accessToken);
+	createJob: async (payload, accountId) => {
+		const token = await getAgencyToken(accountId);
 		if (!token) return null;
 		set({ loadingCreateJob: true });
 		try {
-			const response = await apiClient.post("/agency/jobs", payload, {
+			const response = await BackendApiClient.post("/agency/jobs", payload, {
 				headers: { Authorization: `Bearer ${token}` },
 			});
 			const job = (response.data?.data ?? response.data) as JobListItem;
@@ -596,14 +634,18 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			set({ loadingCreateJob: false });
 		}
 	},
-	updateJob: async (id, payload, accessToken) => {
-		const token = getToken(accessToken);
+	updateJob: async (id, payload, accountId) => {
+		const token = await getAgencyToken(accountId);
 		if (!token) return null;
 		set({ loadingUpdateJob: true });
 		try {
-			const response = await apiClient.patch(`/agency/jobs/${id}`, payload, {
-				headers: { Authorization: `Bearer ${token}` },
-			});
+			const response = await BackendApiClient.patch(
+				`/agency/jobs/${id}`,
+				payload,
+				{
+					headers: { Authorization: `Bearer ${token}` },
+				}
+			);
 			const job = (response.data?.data ?? response.data) as JobDetail;
 			set({ job });
 			successToast(
@@ -617,12 +659,12 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			set({ loadingUpdateJob: false });
 		}
 	},
-	deleteJob: async (id, accessToken) => {
-		const token = getToken(accessToken);
+	deleteJob: async (id, accountId) => {
+		const token = await getAgencyToken(accountId);
 		if (!token) return false;
 		set({ loadingDeleteJob: true });
 		try {
-			const response = await apiClient.delete(`/agency/jobs/${id}`, {
+			const response = await BackendApiClient.delete(`/agency/jobs/${id}`, {
 				headers: { Authorization: `Bearer ${token}` },
 			});
 			set((state) => ({
@@ -639,13 +681,13 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			set({ loadingDeleteJob: false });
 		}
 	},
-	setJobActiveStatus: async (id, isActive, accessToken) => {
-		const token = getToken(accessToken);
+	setJobActiveStatus: async (id, isActive, accountId) => {
+		const token = await getAgencyToken(accountId);
 		if (!token) return false;
 		set({ loadingToggleActive: true });
 		try {
 			const endpoint = isActive ? "activate" : "inactivate";
-			const response = await apiClient.patch(
+			const response = await BackendApiClient.patch(
 				`/agency/jobs/${id}/${endpoint}`,
 				null,
 				{
@@ -668,14 +710,21 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			set({ loadingToggleActive: false });
 		}
 	},
-	createJobAiPrompt: async (payload, accessToken) => {
-		const token = getToken(accessToken);
+	createJobAiPrompt: async (
+		payload: CreateJobAiPromptPayload,
+		accountId: string | number
+	) => {
+		const token = await getAgencyToken(accountId);
 		if (!token) return false;
 		set({ loadingCreatePrompt: true });
 		try {
-			const response = await apiClient.post("/agency/job-ai-prompts", payload, {
-				headers: { Authorization: `Bearer ${token}` },
-			});
+			const response = await BackendApiClient.post(
+				"/agency/job-ai-prompts",
+				payload,
+				{
+					headers: { Authorization: `Bearer ${token}` },
+				}
+			);
 			successToast(
 				resolveResponseMessage(response, "AI prompt saved successfully.")
 			);
@@ -687,12 +736,12 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			set({ loadingCreatePrompt: false });
 		}
 	},
-	upsertJobAiPrompt: async (id, payload, accessToken) => {
-		const token = getToken(accessToken);
+	upsertJobAiPrompt: async (id, payload, accountId) => {
+		const token = await getAgencyToken(accountId);
 		if (!token) return false;
 		set({ loadingUpsertPrompt: true });
 		try {
-			const response = await apiClient.post(
+			const response = await BackendApiClient.post(
 				`/agency/jobs/${id}/ai-prompt`,
 				payload,
 				{
@@ -710,8 +759,8 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			set({ loadingUpsertPrompt: false });
 		}
 	},
-	generateJobContent: async (payload, accessToken) => {
-		const token = getToken(accessToken);
+	generateJobContent: async (payload, accountId) => {
+		const token = await getAgencyToken(accountId);
 		if (!token) return null;
 		const target = payload.target ?? "both";
 		if (target === "description") {
@@ -725,7 +774,7 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			});
 		}
 		try {
-			const response = await apiClient.post(
+			const response = await BackendApiClient.post(
 				"/agency/jobs/ai/generate",
 				payload,
 				{
@@ -756,14 +805,17 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			}
 		}
 	},
-	getJobApplications: async (id, accessToken) => {
-		const token = getToken(accessToken);
+	getJobApplications: async (id, accountId) => {
+		const token = await getAgencyToken(accountId);
 		if (!token) return;
 		set({ loadingJobApplications: true });
 		try {
-			const response = await apiClient.get(`/agency/jobs/${id}/applications`, {
-				headers: { Authorization: `Bearer ${token}` },
-			});
+			const response = await BackendApiClient.get(
+				`/agency/jobs/${id}/applications`,
+				{
+					headers: { Authorization: `Bearer ${token}` },
+				}
+			);
 			const applications = (response.data?.data ??
 				response.data ??
 				[]) as JobApplication[];
@@ -776,12 +828,12 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			set({ loadingJobApplications: false });
 		}
 	},
-	sendDirectInterview: async (candidateId, jobId, resumeId, accessToken) => {
-		const token = getToken(accessToken);
+	sendDirectInterview: async (candidateId, jobId, resumeId, accountId) => {
+		const token = await getAgencyToken(accountId);
 		if (!token) return;
 		set({ resumeActionLoading: { id: resumeId, type: "invite" } });
 		try {
-			const response = await apiClient.post(
+			const response = await BackendApiClient.post(
 				`/invitation/direct`,
 				{ candidate_id: candidateId, job_id: jobId },
 				{ headers: { Authorization: `Bearer ${token}` } }
@@ -793,6 +845,113 @@ export const useJobStore = create<IJobStore>((set, get) => ({
 			errorToast(resolveErrorMessage(error, "Failed to send invitation."));
 		} finally {
 			set({ resumeActionLoading: null });
+		}
+	},
+	// ─── Admin-specific methods (use apiClient → relative Next.js API routes) ───
+	getAdminJobs: async (
+		search,
+		sort_by,
+		sort_order,
+		page,
+		industry,
+		employment_type
+	) => {
+		set({ loadingJobs: true });
+		try {
+			const params: Record<string, unknown> = {
+				search,
+				sort_by,
+				sort_order,
+				page,
+				limit: 10,
+			};
+			if (industry) params.industry = industry;
+			if (employment_type) params.employment_type = employment_type;
+			const response = await apiClient.get("/api/jobs", { params });
+			const jobs = (response.data?.data ?? []) as JobListItem[];
+			const meta = (response.data?.meta ?? null) as JobPaginationMeta | null;
+			set({ jobs, meta, hasLoadedJobs: true });
+		} catch {
+			set({ hasLoadedJobs: true });
+		} finally {
+			set({ loadingJobs: false });
+		}
+	},
+	createAdminJob: async (payload) => {
+		set({ loadingCreateJob: true });
+		try {
+			const response = await apiClient.post("/api/jobs", payload);
+			const job = (response.data?.data ?? response.data) as JobListItem;
+			set((state) => ({ jobs: [job, ...state.jobs] }));
+			successToast(
+				resolveResponseMessage(response, "Job created successfully.")
+			);
+			return job;
+		} catch (error) {
+			errorToast(resolveErrorMessage(error, "Couldn't create the job."));
+			return null;
+		} finally {
+			set({ loadingCreateJob: false });
+		}
+	},
+	getAdminJobById: async (id) => {
+		set({ loadingJob: true });
+		try {
+			const response = await apiClient.get(`/api/jobs/${id}`);
+			const job = (response.data?.data ?? response.data) as JobDetail;
+			set({ job });
+			return job;
+		} catch {
+			return null;
+		} finally {
+			set({ loadingJob: false });
+		}
+	},
+	updateAdminJob: async (id, payload) => {
+		set({ loadingUpdateJob: true });
+		try {
+			const response = await apiClient.put(`/api/jobs/${id}`, payload);
+			const job = (response.data?.data ?? response.data) as JobDetail;
+			set({ job });
+			successToast(
+				resolveResponseMessage(response, "Job updated successfully.")
+			);
+			return job;
+		} catch (error) {
+			errorToast(resolveErrorMessage(error, "Couldn't update the job."));
+			return null;
+		} finally {
+			set({ loadingUpdateJob: false });
+		}
+	},
+	deleteAdminJob: async (id) => {
+		set({ loadingDeleteJob: true });
+		try {
+			const response = await apiClient.delete(`/api/jobs/${id}`);
+			set((state) => ({ jobs: state.jobs.filter((j) => j.id !== id) }));
+			successToast(
+				resolveResponseMessage(response, "Job deleted successfully.")
+			);
+			return true;
+		} catch (error) {
+			errorToast(resolveErrorMessage(error, "Couldn't delete the job."));
+			return false;
+		} finally {
+			set({ loadingDeleteJob: false });
+		}
+	},
+	getCompanies: async (search) => {
+		set({ loadingCompanies: true });
+		try {
+			const params: Record<string, unknown> = { limit: 100 };
+			if (search) params.search = search;
+			const response = await apiClient.get("/api/companies", { params });
+			const companies = (response.data?.data ?? []) as CompanyOption[];
+			set({ companies });
+		} catch {
+			// silently fail — dropdown will just be empty
+		} finally {
+			set({ loadingCompanies: false });
 		}
 	},
 }));
