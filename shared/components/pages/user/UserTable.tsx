@@ -119,7 +119,7 @@ const UserTable = ({
 					) : (
 						users.map((user) => (
 							<TableRow
-								key={user.id}
+								key={`${user.id}-${user.type}`}
 								className="border-b border-slate-100 hover:bg-slate-50/50 dark:border-slate-800 dark:hover:bg-slate-900/50"
 							>
 								{/* User */}
