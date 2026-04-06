@@ -19,6 +19,7 @@ import {
 	X,
 	CheckCircle,
 	Languages,
+	Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +40,10 @@ import {
 	workplaceTypeOptions,
 } from "@/shared/core/job/options";
 import { splitList } from "@/shared/components/pages/job/jobFormUtils";
-import { useJobStore } from "@/shared/store/pages/job/useJobStore";
+import {
+	CompanyOption,
+	useJobStore,
+} from "@/shared/store/pages/job/useJobStore";
 import { warningToast } from "@/shared/helper/toast";
 import JobAiPromptModal, {
 	AiPromptFormValues,
@@ -208,14 +212,27 @@ const AddJobForm = () => {
 	} | null>(null);
 
 	const {
-		createJob,
+		createAdminJob,
 		createJobAiPrompt,
 		generateJobContent,
 		loadingCreateJob,
 		loadingCreatePrompt,
 		loadingGenerateDescription,
 		loadingGenerateRequirements,
+		getCompanies,
+		companies,
+		loadingCompanies,
 	} = useJobStore();
+
+	const [selectedAgencyId, setSelectedAgencyId] = useState<number | null>(null);
+	const [selectedAgency, setSelectedAgency] = useState<CompanyOption | null>(
+		null
+	);
+	const [agencyError, setAgencyError] = useState<string | null>(null);
+
+	useEffect(() => {
+		getCompanies();
+	}, [getCompanies]);
 
 	const {
 		register,
@@ -390,17 +407,20 @@ const AddJobForm = () => {
 			return;
 		}
 		const v = getValues();
-		const generated = await generateJobContent({
-			title: v.title?.trim() ?? "",
-			seniority_level: v.seniority_level ?? "",
-			industry: v.industry ?? "",
-			employment_type: v.employment_type ?? "",
-			workplace_type: v.workplace_type ?? "",
-			location: v.location ?? "",
-			technical_skills: technicalSkills,
-			soft_skills: splitList(v.soft_skills),
-			target,
-		});
+		const generated = await generateJobContent(
+			{
+				title: v.title?.trim() ?? "",
+				seniority_level: v.seniority_level ?? "",
+				industry: v.industry ?? "",
+				employment_type: v.employment_type ?? "",
+				workplace_type: v.workplace_type ?? "",
+				location: v.location ?? "",
+				technical_skills: technicalSkills,
+				soft_skills: splitList(v.soft_skills),
+				target,
+			},
+			selectedAgency?.account_id ?? 0
+		);
 		if (!generated) return;
 		if (target === "description")
 			setValue("description", generated.description, {
@@ -415,6 +435,12 @@ const AddJobForm = () => {
 	};
 
 	const handleNext = async () => {
+		// Step 1: validate company selection first
+		if (currentStep === 1 && !selectedAgencyId) {
+			setAgencyError("Please select a company");
+			setStepError("Please complete all required fields");
+			return;
+		}
 		const fields = STEP_REQUIRED[currentStep];
 		if (fields.length > 0) {
 			const valid = await trigger(fields);
@@ -428,6 +454,7 @@ const AddJobForm = () => {
 			setStepError("Please add at least one skill to continue");
 			return;
 		}
+		setAgencyError(null);
 		setStepError(null);
 		setCurrentStep((s) => s + 1);
 	};
@@ -445,8 +472,14 @@ const AddJobForm = () => {
 	const onSubmit: SubmitHandler<JobFormValues> = async (values) => {
 		// Safety guard — never submit unless we're actually on the last step
 		if (currentStep !== TOTAL_STEPS) return;
+		if (!selectedAgencyId) {
+			setAgencyError("Please select a company");
+			setCurrentStep(1);
+			return;
+		}
 		const parsed = jobSchema.parse(values);
-		const created = await createJob({
+		const created = await createAdminJob({
+			agency_id: selectedAgencyId,
 			title: parsed.title,
 			employment_type: parsed.employment_type,
 			workplace_type: parsed.workplace_type,
@@ -495,7 +528,7 @@ const AddJobForm = () => {
 	};
 
 	const handlePromptModalSubmit = async (values: AiPromptFormValues) => {
-		const ok = await createJobAiPrompt(values);
+		const ok = await createJobAiPrompt(values, selectedAgency?.account_id ?? 0);
 		if (ok) setPromptOpen(false);
 	};
 
@@ -503,6 +536,9 @@ const AddJobForm = () => {
 		setSuccessData(null);
 		setCurrentStep(1);
 		setStepError(null);
+		setSelectedAgencyId(null);
+		setSelectedAgency(null);
+		setAgencyError(null);
 	};
 	const progress = Math.round((currentStep / STEPS.length) * 100);
 
@@ -550,7 +586,11 @@ const AddJobForm = () => {
 	if (successData) {
 		return (
 			<>
-				<JobSuccessScreen {...successData} onPostAnother={resetWizard} />
+				<JobSuccessScreen
+					accountId={selectedAgency?.account_id ?? 0}
+					{...successData}
+					onPostAnother={resetWizard}
+				/>
 				<JobAiPromptModal
 					open={promptOpen}
 					onOpenChange={setPromptOpen}
@@ -662,6 +702,55 @@ const AddJobForm = () => {
 									Let&apos;s start with the essential details
 								</p>
 							</div>
+
+							{/* Company selection */}
+							<div className="space-y-1.5">
+								<label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+									Company <span className="ml-0.5 text-red-500">*</span>
+								</label>
+								<Select
+									onValueChange={(v) => {
+										setSelectedAgencyId(Number(v));
+										setSelectedAgency(
+											companies.find((c) => c.id === Number(v)) ?? null
+										);
+										setAgencyError(null);
+									}}
+									value={
+										selectedAgencyId != null ? String(selectedAgencyId) : ""
+									}
+									disabled={loadingCompanies}
+								>
+									<SelectTrigger className="h-10! min-h-0 w-full rounded-[10px] border-0 bg-[#fafafa] shadow-none ring-0 focus:ring-1 focus:ring-[#005ca9]/30 dark:bg-slate-800 text-sm">
+										<div className="flex items-center gap-2">
+											<Building2 className="h-4 w-4 shrink-0 text-slate-400" />
+											<SelectValue
+												placeholder={
+													loadingCompanies
+														? "Loading companies…"
+														: "Select company…"
+												}
+											/>
+										</div>
+									</SelectTrigger>
+									<SelectContent>
+										{companies.map((c) => (
+											<SelectItem key={c.id} value={String(c.id)}>
+												{c.company_name ?? `Company #${c.id}`}
+											</SelectItem>
+										))}
+										{!loadingCompanies && companies.length === 0 && (
+											<div className="px-3 py-2 text-xs text-slate-400">
+												No companies found
+											</div>
+										)}
+									</SelectContent>
+								</Select>
+								{agencyError && (
+									<p className="text-xs text-red-500">{agencyError}</p>
+								)}
+							</div>
+
 							<Field label="Job Title" required error={errors.title?.message}>
 								<Input
 									placeholder="e.g. Senior Frontend Developer"

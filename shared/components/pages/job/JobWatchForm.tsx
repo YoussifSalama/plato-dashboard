@@ -199,6 +199,8 @@ const JobWatchForm = () => {
 	const searchParams = useSearchParams();
 	const jobIdParam = searchParams.get("id");
 	const jobId = jobIdParam ? Number(jobIdParam) : NaN;
+	const accountIdParam = searchParams.get("accountId");
+	const accountId = accountIdParam ? Number(accountIdParam) : "";
 	const [activeTab, setActiveTab] = useState<"details" | "ai">("details");
 	const [currentStep, setCurrentStep] = useState(1);
 	const [stepError, setStepError] = useState<string | null>(null);
@@ -211,8 +213,8 @@ const JobWatchForm = () => {
 		loadingUpsertPrompt,
 		loadingGenerateDescription,
 		loadingGenerateRequirements,
-		getJobById,
-		updateJob: submitJobUpdate,
+		getAdminJobById,
+		updateAdminJob: submitJobUpdate,
 		setJobActiveStatus,
 		upsertJobAiPrompt,
 		generateJobContent,
@@ -351,8 +353,8 @@ const JobWatchForm = () => {
 
 	useEffect(() => {
 		if (!Number.isFinite(jobId)) return;
-		getJobById(jobId);
-	}, [getJobById, jobId]);
+		getAdminJobById(jobId);
+	}, [getAdminJobById, jobId]);
 
 	useEffect(() => {
 		setFormReady(false);
@@ -522,7 +524,7 @@ const JobWatchForm = () => {
 			return;
 		}
 		const payload = buildAiPayload(target);
-		const generated = await generateJobContent(payload);
+		const generated = await generateJobContent(payload, accountId);
 		if (!generated) return;
 		if (target === "description") {
 			setValue("description", generated.description, {
@@ -541,7 +543,7 @@ const JobWatchForm = () => {
 
 	const onPromptSubmit: SubmitHandler<AiPromptFormValues> = async (values) => {
 		if (!Number.isFinite(jobId)) return;
-		await upsertJobAiPrompt(jobId, values);
+		await upsertJobAiPrompt(jobId, values, accountId);
 	};
 
 	const isStale = !!job && job.id !== jobId;
@@ -668,7 +670,7 @@ const JobWatchForm = () => {
 							type="button"
 							disabled={loadingToggleActive || loadingJob}
 							onClick={() =>
-								setJobActiveStatus(jobId, !(job?.is_active ?? false))
+								setJobActiveStatus(jobId, !(job?.is_active ?? false), accountId)
 							}
 							className={
 								isEffectivelyActive

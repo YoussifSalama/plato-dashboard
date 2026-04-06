@@ -19,20 +19,18 @@ import {
 import Link from "next/link";
 import {
 	FileText,
-	Pencil,
-	SearchCode,
 	MapPin,
 	Users,
 	Clock,
 	EyeIcon,
 	SquarePen,
+	Building2,
 } from "lucide-react";
 import { useJobStore } from "@/shared/store/pages/job/useJobStore";
 import type { JobListItem } from "@/shared/store/pages/job/useJobStore";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { apiClient } from "@/lib/apiClient";
 
 dayjs.extend(relativeTime);
 
@@ -72,17 +70,18 @@ const StatusBadge = ({ job }: { job: JobListItem }) => {
 // ─── Applicant Count ──────────────────────────────────────────────────────────
 
 const ApplicantCount = ({ job }: { job: JobListItem }) => {
-	const [count, setCount] = useState<number | null>(
-		job.applicants_count ?? null
-	);
+	const [count] = useState<number | null>(job.applicants_count ?? null);
 
-	useEffect(() => {
-		if (job.applicants_count !== undefined) return;
-		apiClient
-			.get(`/agency/jobs/${job.id}/resumes`, { params: { limit: 1 } })
-			.then((r) => setCount(r.data?.meta?.total ?? 0))
-			.catch(() => setCount(0));
-	}, [job.id, job.applicants_count]);
+	// useEffect(() => {
+	// 	if (job.applicants_count !== undefined) return;
+	// 	const token = getAgencyToken(job.account_id);
+	// 	BackendApiClient.get(`/agency/jobs/${job.id}/resumes`, {
+	// 		params: { limit: 1 },
+	// 		headers: { Authorization: `Bearer ${token}` },
+	// 	})
+	// 		.then((r) => setCount(r.data?.meta?.total ?? 0))
+	// 		.catch(() => setCount(0));
+	// }, [job.id, job.applicants_count, job.account_id]);
 
 	return (
 		<div className="flex items-center gap-2 text-[14px] font-bold text-slate-700 dark:text-slate-200">
@@ -100,7 +99,7 @@ const ApplicantCount = ({ job }: { job: JobListItem }) => {
 
 const SkeletonRow = () => (
 	<TableRow className="border-b border-slate-100 dark:border-slate-800">
-		{[280, 120, 140, 90, 80, 70, 200].map((w, i) => (
+		{[280, 140, 120, 140, 90, 80, 70, 200].map((w, i) => (
 			<TableCell key={i} className="py-4">
 				<div
 					className="h-4 animate-pulse rounded bg-slate-100 dark:bg-slate-800"
@@ -122,12 +121,12 @@ const JobTable = ({
 	loading: boolean;
 	hasLoaded: boolean;
 }) => {
-	const { deleteJob, loadingDeleteJob } = useJobStore();
-	const [jobToDelete, setJobToDelete] = useState<number | null>(null);
+	const { deleteAdminJob, loadingDeleteJob } = useJobStore();
+	const [jobToDelete, setJobToDelete] = useState<null | JobListItem>(null);
 
 	const handleDelete = async () => {
 		if (!jobToDelete) return;
-		await deleteJob(jobToDelete, null);
+		await deleteAdminJob(jobToDelete.id);
 		setJobToDelete(null);
 	};
 
@@ -141,6 +140,9 @@ const JobTable = ({
 					<TableRow className="border-b border-slate-100 dark:border-slate-800 hover:bg-transparent">
 						<TableHead className="pl-6 h-11 text-[10px] font-bold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
 							JOB TITLE
+						</TableHead>
+						<TableHead className="h-11 text-[10px] font-bold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
+							COMPANY
 						</TableHead>
 						<TableHead className="h-11 text-[10px] font-bold tracking-wider text-slate-500 dark:text-slate-400 uppercase">
 							DEPARTMENT
@@ -172,7 +174,7 @@ const JobTable = ({
 					) : jobs.length === 0 ? (
 						<TableRow>
 							<TableCell
-								colSpan={7}
+								colSpan={8}
 								className="py-16 text-center text-[14px] text-slate-400"
 							>
 								No jobs found.
@@ -194,6 +196,14 @@ const JobTable = ({
 											<Clock className="h-3 w-3" />
 											<span>{dayjs(job.created_at).fromNow()}</span>
 										</div>
+									</div>
+								</TableCell>
+
+								{/* Company */}
+								<TableCell className="py-4">
+									<div className="flex items-center gap-1.5 text-[13px] font-medium text-slate-600 dark:text-slate-300">
+										<Building2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+										<span>{job.company_name ?? "—"}</span>
 									</div>
 								</TableCell>
 
@@ -229,21 +239,21 @@ const JobTable = ({
 								<TableCell className="py-4 pr-6">
 									<div className="flex items-center justify-end gap-2">
 										<Link
-											href={`/resumes/analyse?jobId=${job.id}`}
+											href={`/resumes/analyse?jobId=${job.id}&accountId=${job.account_id}`}
 											className="inline-flex items-center gap-1.5 rounded-xl bg-[#005ca9] px-4 py-2.5 text-[12px] font-semibold text-white transition hover:bg-[#004e8f]"
 										>
 											<EyeIcon className="h-3.5 w-3.5" />
 											Analyze Resumes
 										</Link>
 										<Link
-											href={`/jobs/${job.id}/resumes`}
+											href={`/jobs/${job.id}/resumes?accountId=${job.account_id}`}
 											className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-[12px] font-semibold text-[#005ca9] transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-blue-400 dark:hover:bg-slate-800"
 										>
 											<FileText className="h-3.5 w-3.5" />
 											View Resumes
 										</Link>
 										<Link
-											href={`/job/watch?id=${job.id}`}
+											href={`/job/watch?id=${job.id}&accountId=${job.account_id}`}
 											className="flex h-8 w-8 items-center justify-center text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-200"
 											title="Edit job"
 										>
