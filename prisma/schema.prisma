@@ -662,6 +662,12 @@ model AgencySubscription {
   extra_cv_scan_quota   Int @default(0)
   extra_interview_quota Int @default(0)
 
+  // Admin-controlled quota overrides (null = use plan default)
+  quota_job_posts_override       Int?
+  quota_resume_analysis_override Int?
+  quota_phone_calls_override     Int?
+  quota_recordings_override      Int?
+
   start_date     DateTime  @default(now())
   end_date       DateTime?
   trial_end_date DateTime?
