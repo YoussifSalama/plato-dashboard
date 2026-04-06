@@ -44,7 +44,12 @@ const MOCK_COMPANIES: Company[] = [
 		id: 1,
 		name: "Acme Corp",
 		plan: "Pro",
-		usage: { jobPosts: 18, candidates: 125000, messages: 4651200, downloads: 40150 },
+		usage: {
+			jobPosts: 18,
+			candidates: 125000,
+			messages: 4651200,
+			downloads: 40150,
+		},
 		limits: { jobPosts: 50, candidates: null, messages: null, downloads: null },
 	},
 	{
@@ -52,20 +57,40 @@ const MOCK_COMPANIES: Company[] = [
 		name: "Tech Solutions",
 		plan: "Enterprise",
 		usage: { jobPosts: 45, candidates: 587, messages: 2340, downloads: 340 },
-		limits: { jobPosts: null, candidates: null, messages: null, downloads: null },
+		limits: {
+			jobPosts: null,
+			candidates: null,
+			messages: null,
+			downloads: null,
+		},
 	},
 	{
 		id: 3,
 		name: "Global Industries",
 		plan: "Pro",
-		usage: { jobPosts: 8, candidates: 67900, messages: 3245100, downloads: 42150 },
-		limits: { jobPosts: 100, candidates: null, messages: null, downloads: null },
+		usage: {
+			jobPosts: 8,
+			candidates: 67900,
+			messages: 3245100,
+			downloads: 42150,
+		},
+		limits: {
+			jobPosts: 100,
+			candidates: null,
+			messages: null,
+			downloads: null,
+		},
 	},
 	{
 		id: 4,
 		name: "Startup Inc",
 		plan: "Basic",
-		usage: { jobPosts: 5, candidates: 23500, messages: 145900, downloads: 12180 },
+		usage: {
+			jobPosts: 5,
+			candidates: 23500,
+			messages: 145900,
+			downloads: 12180,
+		},
 		limits: { jobPosts: 10, candidates: null, messages: null, downloads: null },
 	},
 ];
@@ -126,8 +151,10 @@ const pctColor = (p: number) =>
 
 const PLAN_STYLES: Record<Company["plan"], string> = {
 	Pro: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
-	Enterprise: "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
-	Basic: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400",
+	Enterprise:
+		"bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
+	Basic:
+		"bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400",
 };
 
 // ─── Circular Progress ────────────────────────────────────────────────────────
@@ -148,7 +175,14 @@ const CircleProgress = ({
 	const offset = circ - (pct / 100) * circ;
 	return (
 		<svg width={size} height={size} className="-rotate-90">
-			<circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={trackColor} strokeWidth={5} />
+			<circle
+				cx={size / 2}
+				cy={size / 2}
+				r={r}
+				fill="none"
+				stroke={trackColor}
+				strokeWidth={5}
+			/>
 			<circle
 				cx={size / 2}
 				cy={size / 2}
@@ -185,10 +219,16 @@ type ModalProps = {
 
 const AdjustModal = ({ company, onClose, onSave }: ModalProps) => {
 	const [limits, setLimits] = useState<{ [K in keyof QuotaLimits]: string }>({
-		jobPosts: company.limits.jobPosts === null ? "" : String(company.limits.jobPosts),
-		candidates: company.limits.candidates === null ? "" : String(company.limits.candidates),
-		messages: company.limits.messages === null ? "" : String(company.limits.messages),
-		downloads: company.limits.downloads === null ? "" : String(company.limits.downloads),
+		jobPosts:
+			company.limits.jobPosts === null ? "" : String(company.limits.jobPosts),
+		candidates:
+			company.limits.candidates === null
+				? ""
+				: String(company.limits.candidates),
+		messages:
+			company.limits.messages === null ? "" : String(company.limits.messages),
+		downloads:
+			company.limits.downloads === null ? "" : String(company.limits.downloads),
 	});
 	const [resetUsage, setResetUsage] = useState(false);
 
@@ -324,10 +364,26 @@ const AddCreditsModal = ({
 	const canSubmit = creditType && parseInt(amount) > 0;
 
 	const usageRows = [
-		{ label: "Job Posts", used: company.usage.jobPosts, limit: company.limits.jobPosts },
-		{ label: "Profile Views", used: company.usage.candidates, limit: company.limits.candidates },
-		{ label: "Messages", used: company.usage.messages, limit: company.limits.messages },
-		{ label: "Downloads", used: company.usage.downloads, limit: company.limits.downloads },
+		{
+			label: "Job Posts",
+			used: company.usage.jobPosts,
+			limit: company.limits.jobPosts,
+		},
+		{
+			label: "Profile Views",
+			used: company.usage.candidates,
+			limit: company.limits.candidates,
+		},
+		{
+			label: "Messages",
+			used: company.usage.messages,
+			limit: company.limits.messages,
+		},
+		{
+			label: "Downloads",
+			used: company.usage.downloads,
+			limit: company.limits.downloads,
+		},
 	];
 
 	return (
@@ -360,7 +416,9 @@ const AddCreditsModal = ({
 						<div className="grid grid-cols-2 gap-3">
 							{usageRows.map((row) => (
 								<div key={row.label}>
-									<p className="text-[10px] text-slate-400 mb-0.5">{row.label}</p>
+									<p className="text-[10px] text-slate-400 mb-0.5">
+										{row.label}
+									</p>
 									<p className="text-[15px] font-bold text-slate-800 dark:text-slate-100">
 										{fmtNum(row.used)}/{row.limit ? fmtNum(row.limit) : "∞"}
 									</p>
@@ -379,7 +437,13 @@ const AddCreditsModal = ({
 							onClick={() => setTypeOpen((p) => !p)}
 							className="mt-1.5 flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-left outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800"
 						>
-							<span className={creditType ? "text-slate-800 dark:text-slate-100" : "text-slate-300"}>
+							<span
+								className={
+									creditType
+										? "text-slate-800 dark:text-slate-100"
+										: "text-slate-300"
+								}
+							>
 								{selectedType?.label ?? "Select credit type"}
 							</span>
 							<ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
@@ -390,7 +454,10 @@ const AddCreditsModal = ({
 									<button
 										key={t.value}
 										type="button"
-										onClick={() => { setCreditType(t.value); setTypeOpen(false); }}
+										onClick={() => {
+											setCreditType(t.value);
+											setTypeOpen(false);
+										}}
 										className={clsx(
 											"w-full px-3 py-2.5 text-left text-[13px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors",
 											creditType === t.value
@@ -500,7 +567,10 @@ const QuotasPage = () => {
 		setCompanies((prev) =>
 			prev.map((c) =>
 				c.id === id
-					? { ...c, usage: { jobPosts: 0, candidates: 0, messages: 0, downloads: 0 } }
+					? {
+							...c,
+							usage: { jobPosts: 0, candidates: 0, messages: 0, downloads: 0 },
+						}
 					: c
 			)
 		);
@@ -545,10 +615,10 @@ const QuotasPage = () => {
 						Monitor and manage user quotas across the platform
 					</p>
 				</div>
-				<button className="inline-flex items-center gap-2 rounded-xl bg-[#005ca9] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#004e8f] transition-colors shadow-sm self-start sm:self-auto">
+				{/* <button className="inline-flex items-center gap-2 rounded-xl bg-[#005ca9] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#004e8f] transition-colors shadow-sm self-start sm:self-auto">
 					<SlidersHorizontal className="h-4 w-4" />
 					Bulk Update Quotas
-				</button>
+				</button> */}
 			</div>
 
 			{/* Platform-Wide Usage */}
@@ -762,7 +832,9 @@ const QuotasPage = () => {
 				{activeTab === "candidate" && (
 					<div className="flex flex-col items-center justify-center py-20 text-slate-400">
 						<Users className="h-10 w-10 mb-3 opacity-30" />
-						<p className="text-[14px] font-medium">Candidate quotas coming soon</p>
+						<p className="text-[14px] font-medium">
+							Candidate quotas coming soon
+						</p>
 					</div>
 				)}
 			</div>
