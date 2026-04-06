@@ -202,6 +202,18 @@ enum PlanName {
   CUSTOM
 }
 
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum TransactionStatus {
+  COMPLETED
+  PENDING
+  FAILED
+  REFUNDED
+}
+
 enum CandidateInboxStatus {
   unread
   read
@@ -446,6 +458,8 @@ model Agency {
 
   interview_sessions InterviewSession[]
 
+  subscription_transactions SubscriptionTransaction[]
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 }
@@ -561,10 +575,30 @@ model WalkthroughRequest {
   updated_at DateTime @updatedAt
 }
 
+// --- voucher.prisma ---
+model Voucher {
+  id             Int          @id @default(autoincrement())
+  code           String       @unique
+  discount       Float
+  type           DiscountType
+  usage_limit    Int?
+  usage_count    Int          @default(0)
+  expires_at     DateTime?
+  is_active      Boolean      @default(true)
+  plans          String[]     @default([])
+  features       String[]     @default([])
+  color          String       @default("#3b82f6")
+  revenue_impact Float        @default(0)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
 // --- subscription.prisma ---
 model SubscriptionPlan {
   id                       Int      @id @default(autoincrement())
   name                     PlanName @unique
+  display_name             String?
   interview_sessions_quota Int
   resume_analysis_quota    Int
   job_posting_quota        Int
@@ -575,11 +609,39 @@ model SubscriptionPlan {
   extra_cv_scan_price      Float    @default(0)
   extra_interview_price    Float    @default(0)
   price                    Int      @default(0)
+  billing_period           String   @default("month")
+  features                 String[] @default([])
+  color                    String   @default("#3b82f6")
+  is_public                Boolean  @default(true)
 
-  agency_subscriptions AgencySubscription[]
+  agency_subscriptions     AgencySubscription[]
+  transactions             SubscriptionTransaction[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+}
+
+model SubscriptionTransaction {
+  id        Int               @id @default(autoincrement())
+  amount    Float
+  status    TransactionStatus @default(PENDING)
+
+  agency_id Int
+  agency    Agency @relation(fields: [agency_id], references: [id], onDelete: Cascade)
+
+  plan_id Int
+  plan    SubscriptionPlan @relation(fields: [plan_id], references: [id])
+
+  stripe_payment_intent_id String?
+  agency_name_snapshot     String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([agency_id])
+  @@index([plan_id])
+  @@index([created_at])
+  @@index([status])
 }
 
 model AgencySubscription {
@@ -1107,6 +1169,19 @@ model JobApplicationDocument {
 
   job_application_id Int
   job_application    JobApplication @relation(fields: [job_application_id], references: [id], onDelete: Cascade)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+// --- platform-settings.prisma ---
+model PlatformSettings {
+  id                  Int     @id @default(1)
+  platform_name       String  @default("Plato")
+  support_email       String  @default("support@plato.com")
+  email_notifications Boolean @default(true)
+  new_user_alerts     Boolean @default(true)
+  payment_alerts      Boolean @default(true)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
