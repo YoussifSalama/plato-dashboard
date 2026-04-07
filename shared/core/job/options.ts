@@ -97,5 +97,11 @@ export const jobTechnicalSkillsOptions = [
 export const jobLanguageOptions = [
     { label: "Arabic", value: "ar" },
     { label: "English", value: "en" },
+    { label: "Spanish", value: "es" },
+    { label: "French", value: "fr" },
+    { label: "German", value: "de" },
+    { label: "Chinese", value: "zh" },
+    { label: "Hindi", value: "hi" },
+    { label: "Italian", value: "it" },
 ];
 
