@@ -1193,6 +1193,42 @@ model PlatformSettings {
   updated_at DateTime @updatedAt
 }
 
+// --- system-log.prisma ---
+model SystemLog {
+  id               Int      @id @default(autoincrement())
+
+  // What happened
+  action           String   // CREATE | UPDATE | DELETE | READ
+  table_name       String   // jobs | vouchers | admins | etc.
+  record_id        String?  // affected record's ID as string
+
+  // Who did it
+  changed_by       String   // admin email
+  changed_by_role  String   @default("super_admin")
+  source           String   @default("ADMIN") // ADMIN | API | WEBHOOK | CRON
+
+  // Request info
+  method           String?  // GET | POST | PUT | DELETE
+  path             String?  // /api/jobs/123
+  ip               String?
+
+  // Result
+  status           String   @default("SUCCESS") // SUCCESS | FAILED
+  error_msg        String?
+
+  // Extra context (e.g. changed fields snapshot)
+  meta             Json?
+
+  created_at       DateTime @default(now())
+
+  @@index([table_name])
+  @@index([changed_by])
+  @@index([created_at])
+  @@index([status])
+  @@index([source])
+  @@index([action])
+}
+
 // --- admin.prisma ---
 model Admin {
   id        Int     @id @default(autoincrement())

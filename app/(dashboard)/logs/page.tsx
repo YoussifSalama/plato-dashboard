@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
 	LineChart,
 	Line,
@@ -24,6 +24,7 @@ import {
 	XCircle,
 	Activity,
 	Database,
+	Clock,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -33,30 +34,53 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import PaginationBar from "@/shared/common/features/PaginationBar";
+import { apiClient } from "@/lib/apiClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ActionType = "CREATE" | "UPDATE" | "DELETE";
-type SourceType = "ADMIN" | "API" | "WEBHOOK" | "CRON";
-type StatusType = "SUCCESS" | "FAILED";
+type ActionType =
+	| "CREATE"
+	| "UPDATE"
+	| "DELETE"
+	| "BACKGROUND_JOB"
+	| `WS:${string}`;
+type SourceType = "ADMIN" | "API" | "WEBHOOK" | "CRON" | "WEBSOCKET";
+type StatusType = "SUCCESS" | "FAILED" | "PENDING";
 
 type LogEntry = {
-	id: number;
+	id: string | number;
 	timestamp: string;
 	table: string;
-	recordId: string;
+	recordId?: string;
 	action: ActionType;
 	changedBy: string;
 	changedByRole: string;
 	source: SourceType;
 	status: StatusType;
 	errorMsg?: string;
-	ip: string;
+	ip?: string;
 };
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+type SummaryData = {
+	stats: {
+		total: number;
+		successRate: number;
+		failedCount: number;
+		apiCalls: number;
+	};
+	activityTrend: {
+		date: string;
+		success: number;
+		failed: number;
+		total: number;
+	}[];
+	actionDistribution: { name: string; value: number; fill: string }[];
+	tableOptions: string[];
+};
 
-const ACTIVITY_DATA = [
+// ─── Mock data (shown when API returns no records) ────────────────────────────
+
+const MOCK_ACTIVITY_DATA = [
 	{ date: "Mar 01", success: 148, failed: 12, total: 160 },
 	{ date: "Mar 08", success: 183, failed: 18, total: 201 },
 	{ date: "Mar 15", success: 215, failed: 14, total: 229 },
@@ -66,7 +90,7 @@ const ACTIVITY_DATA = [
 	{ date: "Apr 12", success: 245, failed: 16, total: 261 },
 ];
 
-const DISTRIBUTION_DATA = [
+const MOCK_DISTRIBUTION_DATA = [
 	{ name: "SUCCESS", value: 55, fill: "#1d4ed8" },
 	{ name: "UPDATE", value: 36, fill: "#22c55e" },
 	{ name: "FAILED", value: 9, fill: "#ef4444" },
@@ -107,8 +131,8 @@ const MOCK_LOGS: LogEntry[] = [
 		changedByRole: "system",
 		source: "ADMIN",
 		status: "FAILED",
-		errorMsg: "Foreign key constraint violation",
 		ip: "127.0.0.1",
+		errorMsg: "Foreign key constraint violation",
 	},
 	{
 		id: 4,
@@ -168,8 +192,8 @@ const MOCK_LOGS: LogEntry[] = [
 		changedByRole: "super_admin",
 		source: "ADMIN",
 		status: "FAILED",
-		errorMsg: "Cannot delete user with active subscriptions",
 		ip: "192.168.1.1",
+		errorMsg: "Cannot delete user with active subscriptions",
 	},
 	{
 		id: 9,
@@ -241,8 +265,8 @@ const MOCK_LOGS: LogEntry[] = [
 		changedByRole: "api_service",
 		source: "API",
 		status: "FAILED",
-		errorMsg: "Record not found",
 		ip: "10.0.0.5",
+		errorMsg: "Record not found",
 	},
 	{
 		id: 15,
@@ -270,7 +294,7 @@ const MOCK_LOGS: LogEntry[] = [
 	},
 ];
 
-const TABLE_OPTIONS = [
+const MOCK_TABLE_OPTIONS = [
 	"All Tables",
 	"users",
 	"jobs",
@@ -289,16 +313,22 @@ const ACTION_OPTIONS: (ActionType | "all")[] = [
 	"CREATE",
 	"UPDATE",
 	"DELETE",
+	"BACKGROUND_JOB",
 ];
-const STATUS_OPTIONS: (StatusType | "all")[] = ["all", "SUCCESS", "FAILED"];
+const STATUS_OPTIONS: (StatusType | "all")[] = [
+	"all",
+	"SUCCESS",
+	"FAILED",
+	"PENDING",
+];
 const SOURCE_OPTIONS: (SourceType | "all")[] = [
 	"all",
 	"ADMIN",
 	"API",
 	"WEBHOOK",
 	"CRON",
+	"WEBSOCKET",
 ];
-
 const PAGE_SIZE = 8;
 
 // ─── Badge helpers ────────────────────────────────────────────────────────────
@@ -308,13 +338,23 @@ const ACTION_STYLES: Record<ActionType, string> = {
 		"bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
 	UPDATE: "bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400",
 	DELETE: "bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400",
+	BACKGROUND_JOB:
+		"bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
 };
+function getActionStyle(action: ActionType): string {
+	if (action.startsWith("WS:")) {
+		return "bg-purple-100 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400";
+	}
+
+	return ACTION_STYLES[action] ?? "";
+}
 
 const SOURCE_STYLES: Record<SourceType, string> = {
 	ADMIN: "bg-[#005CA91A] text-[#005CA9]",
 	API: "bg-[#905DF81A] text-[#905DF8]",
 	WEBHOOK: "bg-[#48BB781A] text-[#48BB78]",
 	CRON: "bg-[#F6AD551A] text-[#F6AD55]",
+	WEBSOCKET: "bg-[#005CA91A] text-[#005CA9]",
 };
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
@@ -385,7 +425,7 @@ const ChartTooltip = ({
 	);
 };
 
-// ─── Pill filter dropdown ─────────────────────────────────────────────────────
+// ─── Filter dropdown ──────────────────────────────────────────────────────────
 
 function FilterDropdown<T extends string>({
 	label,
@@ -437,9 +477,93 @@ function FilterDropdown<T extends string>({
 	);
 }
 
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function LogsSkeleton() {
+	return (
+		<section className="space-y-5 w-full animate-pulse">
+			{/* Header */}
+			<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between px-2">
+				<div className="space-y-2">
+					<div className="h-7 w-36 rounded-lg bg-slate-200" />
+					<div className="h-4 w-56 rounded bg-slate-100" />
+				</div>
+				<div className="h-10 w-32 rounded-xl bg-slate-200" />
+			</div>
+
+			{/* Stat cards */}
+			<div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+				{Array.from({ length: 4 }).map((_, i) => (
+					<div
+						key={i}
+						className="flex items-start gap-4 rounded-2xl bg-white border border-slate-100 p-5"
+					>
+						<div className="h-11 w-11 shrink-0 rounded-xl bg-slate-200" />
+						<div className="flex-1 space-y-2">
+							<div className="h-3 w-20 rounded bg-slate-200" />
+							<div className="h-7 w-16 rounded bg-slate-200" />
+							<div className="h-2.5 w-24 rounded bg-slate-100" />
+						</div>
+					</div>
+				))}
+			</div>
+
+			{/* Charts */}
+			<div className="grid gap-4 xl:grid-cols-[1fr_500px]">
+				<div className="rounded-2xl bg-white border border-slate-100 p-5 space-y-3">
+					<div className="h-5 w-32 rounded bg-slate-200" />
+					<div className="h-[300px] rounded-xl bg-slate-100" />
+				</div>
+				<div className="rounded-2xl bg-white border border-slate-100 p-5 space-y-3">
+					<div className="h-5 w-36 rounded bg-slate-200" />
+					<div className="h-[250px] rounded-xl bg-slate-100" />
+					<div className="space-y-2 mt-2">
+						{Array.from({ length: 3 }).map((_, i) => (
+							<div key={i} className="flex items-center justify-between">
+								<div className="h-3 w-24 rounded bg-slate-200" />
+								<div className="h-3 w-8 rounded bg-slate-200" />
+							</div>
+						))}
+					</div>
+				</div>
+			</div>
+
+			{/* Table card */}
+			<div className="rounded-2xl bg-white border border-slate-100 overflow-hidden">
+				{/* Filter bar */}
+				<div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+					<div className="h-4 w-28 rounded bg-slate-200" />
+					<div className="flex gap-2">
+						<div className="h-8 w-20 rounded-xl bg-slate-200" />
+						<div className="h-8 w-24 rounded-xl bg-slate-200" />
+					</div>
+				</div>
+				{/* Search bar */}
+				<div className="px-5 py-3 border-b border-slate-100">
+					<div className="h-9 w-full rounded-xl bg-slate-100" />
+				</div>
+				{/* Table rows */}
+				<div className="divide-y divide-slate-100">
+					{Array.from({ length: 8 }).map((_, i) => (
+						<div key={i} className="flex items-center gap-4 px-5 py-3.5">
+							<div className="h-3 w-32 rounded bg-slate-200" />
+							<div className="h-5 w-14 rounded-full bg-slate-200" />
+							<div className="h-3 w-20 rounded bg-slate-100 flex-1" />
+							<div className="h-3 w-28 rounded bg-slate-100" />
+							<div className="h-5 w-16 rounded-full bg-slate-200" />
+							<div className="h-5 w-16 rounded-full bg-slate-100" />
+						</div>
+					))}
+				</div>
+			</div>
+		</section>
+	);
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const LogsPage = () => {
+	// Filter state
 	const [search, setSearch] = useState("");
 	const [tableFilter, setTable] = useState("All Tables");
 	const [actionFilter, setAction] = useState<ActionType | "all">("all");
@@ -447,24 +571,159 @@ const LogsPage = () => {
 	const [sourceFilter, setSource] = useState<SourceType | "all">("all");
 	const [showFilters, setShowFilters] = useState(false);
 	const [page, setPage] = useState(1);
+	const [exporting, setExporting] = useState(false);
 
-	const filtered = MOCK_LOGS.filter((l) => {
-		const matchSearch =
-			!search ||
-			[l.table, l.recordId, l.changedBy, l.ip].some((v) =>
-				v.toLowerCase().includes(search.toLowerCase())
-			);
-		const matchTable = tableFilter === "All Tables" || l.table === tableFilter;
-		const matchAction = actionFilter === "all" || l.action === actionFilter;
-		const matchStatus = statusFilter === "all" || l.status === statusFilter;
-		const matchSource = sourceFilter === "all" || l.source === sourceFilter;
-		return (
-			matchSearch && matchTable && matchAction && matchStatus && matchSource
-		);
-	});
+	// API data state
+	const [apiLogs, setApiLogs] = useState<LogEntry[]>([]);
+	const [apiTotal, setApiTotal] = useState(0);
+	const [summary, setSummary] = useState<SummaryData | null>(null);
+	const [usingMock, setUsingMock] = useState(false);
+	const [loadingLogs, setLoadingLogs] = useState(true);
+	const [tableOptions, setTableOptions] =
+		useState<string[]>(MOCK_TABLE_OPTIONS);
 
-	const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-	const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+	// ── Fetch summary once on mount ─────────────────────────────────────────
+
+	useEffect(() => {
+		apiClient
+			.get("/api/logs/summary")
+			.then((res) => {
+				const data: SummaryData = res.data?.data;
+				if (data) {
+					setSummary(data);
+					if (data.tableOptions?.length) setTableOptions(data.tableOptions);
+				}
+			})
+			.catch(() => {
+				/* summary stays null, mock used */
+			});
+	}, []);
+
+	// ── Fetch logs on every filter / page change ────────────────────────────
+
+	useEffect(() => {
+		apiClient
+			.get("/api/logs", {
+				params: {
+					page,
+					limit: PAGE_SIZE,
+					search,
+					table: tableFilter !== "All Tables" ? tableFilter : "",
+					action: actionFilter !== "all" ? actionFilter : "",
+					status: statusFilter !== "all" ? statusFilter : "",
+					source: sourceFilter !== "all" ? sourceFilter : "",
+				},
+			})
+			.then((res) => {
+				const data: LogEntry[] = res.data?.data ?? [];
+				const grandTotal: number = res.data?.meta?.grand_total ?? 0;
+				const total: number = res.data?.meta?.total ?? 0;
+
+				if (grandTotal === 0) {
+					setUsingMock(true);
+					setApiLogs([]);
+					setApiTotal(0);
+				} else {
+					setUsingMock(false);
+					setApiLogs(data);
+					setApiTotal(total);
+				}
+			})
+			.catch(() => {
+				setUsingMock(true);
+				setApiLogs([]);
+				setApiTotal(0);
+			})
+			.finally(() => setLoadingLogs(false));
+	}, [page, search, tableFilter, actionFilter, statusFilter, sourceFilter]);
+
+	// ── Derive display data ─────────────────────────────────────────────────
+
+	// When using mock: filter client-side
+	const mockFiltered = usingMock
+		? MOCK_LOGS.filter((l) => {
+				const matchSearch =
+					!search ||
+					[l.table, l.recordId, l.changedBy, l.ip].some((v) =>
+						v?.toLowerCase().includes(search.toLowerCase())
+					);
+				const matchTable =
+					tableFilter === "All Tables" || l.table === tableFilter;
+				const matchAction = actionFilter === "all" || l.action === actionFilter;
+				const matchStatus = statusFilter === "all" || l.status === statusFilter;
+				const matchSource = sourceFilter === "all" || l.source === sourceFilter;
+				return (
+					matchSearch && matchTable && matchAction && matchStatus && matchSource
+				);
+			})
+		: [];
+
+	const displayLogs = usingMock
+		? mockFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+		: apiLogs;
+	const displayTotal = usingMock ? mockFiltered.length : apiTotal;
+	const totalPages = Math.max(1, Math.ceil(displayTotal / PAGE_SIZE));
+	const paginated = displayLogs; // already paginated (server) or sliced (mock)
+
+	// Stats values: use real API data if available, else mock
+	const mockSuccessCount = MOCK_LOGS.filter(
+		(l) => l.status === "SUCCESS"
+	).length;
+	const mockFailedCount = MOCK_LOGS.filter((l) => l.status === "FAILED").length;
+
+	const statsTotal =
+		!usingMock && summary ? summary.stats.total.toLocaleString() : "1,436";
+	const statsSuccessRate =
+		!usingMock && summary
+			? `${summary.stats.successRate}%`
+			: `${Math.round((mockSuccessCount / MOCK_LOGS.length) * 1000) / 10}%`;
+	const statsFailedCount =
+		!usingMock && summary
+			? String(summary.stats.failedCount)
+			: String(mockFailedCount);
+	const statsApiCalls =
+		!usingMock && summary ? summary.stats.apiCalls.toLocaleString() : "645";
+
+	const activityData =
+		!usingMock && summary?.activityTrend?.length
+			? summary.activityTrend
+			: MOCK_ACTIVITY_DATA;
+	const distributionData =
+		!usingMock && summary?.actionDistribution?.length
+			? summary.actionDistribution
+			: MOCK_DISTRIBUTION_DATA;
+
+	if (loadingLogs) return <LogsSkeleton />;
+
+	const handleExport = async () => {
+		if (exporting) return;
+		setExporting(true);
+		try {
+			const params = new URLSearchParams();
+			if (search) params.set("search", search);
+			if (tableFilter !== "All Tables") params.set("table", tableFilter);
+			if (actionFilter !== "all") params.set("action", actionFilter);
+			if (statusFilter !== "all") params.set("status", statusFilter);
+			if (sourceFilter !== "all") params.set("source", sourceFilter);
+
+			const res = await apiClient.get(`/api/logs/export?${params.toString()}`, {
+				responseType: "blob",
+			});
+
+			const url = URL.createObjectURL(res.data as Blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = `system-logs-${new Date().toISOString().split("T")[0]}.csv`;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
+		} catch {
+			// silently ignore — user stays on page
+		} finally {
+			setExporting(false);
+		}
+	};
 
 	const hasFilters =
 		tableFilter !== "All Tables" ||
@@ -482,12 +741,9 @@ const LogsPage = () => {
 		setPage(1);
 	};
 
-	const successCount = MOCK_LOGS.filter((l) => l.status === "SUCCESS").length;
-	const failedCount = MOCK_LOGS.filter((l) => l.status === "FAILED").length;
-
 	return (
 		<section className="space-y-5 w-full">
-			{/* Header */}
+			{/* ── Header ───────────────────────────────────────────────────── */}
 			<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between px-2">
 				<div>
 					<h2 className="text-[26px] font-bold text-slate-900 tracking-tight dark:text-slate-100">
@@ -497,28 +753,54 @@ const LogsPage = () => {
 						Monitor system activity and track changes
 					</p>
 				</div>
-				<button className="inline-flex items-center gap-2 rounded-xl bg-[#005ca9] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#004e8f] transition-colors shadow-sm self-start sm:self-auto">
-					<Download className="h-4 w-4" />
-					Export Logs
+				<button
+					onClick={handleExport}
+					disabled={exporting}
+					className="inline-flex items-center gap-2 rounded-xl bg-[#005ca9] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#004e8f] transition-colors shadow-sm self-start sm:self-auto disabled:opacity-60 disabled:cursor-not-allowed"
+				>
+					{exporting ? (
+						<svg
+							className="h-4 w-4 animate-spin"
+							viewBox="0 0 24 24"
+							fill="none"
+						>
+							<circle
+								className="opacity-25"
+								cx="12"
+								cy="12"
+								r="10"
+								stroke="currentColor"
+								strokeWidth="4"
+							/>
+							<path
+								className="opacity-75"
+								fill="currentColor"
+								d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+							/>
+						</svg>
+					) : (
+						<Download className="h-4 w-4" />
+					)}
+					{exporting ? "Exporting…" : "Export Logs"}
 				</button>
 			</div>
 
-			{/* Stats */}
+			{/* ── Stats cards ──────────────────────────────────────────────── */}
 			<div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
 				<StatCard
 					icon={<Database className="w-4 h-4" />}
 					iconBg="#dbeafe"
 					iconColor="#2563eb"
 					label="Total Logs"
-					value="1,436"
-					sub="Last 7 days"
+					value={statsTotal}
+					sub="All time"
 				/>
 				<StatCard
 					icon={<CheckCircle className="h-5 w-5" />}
 					iconBg="#dcfce7"
 					iconColor="#16a34a"
 					label="Success Rate"
-					value={`${Math.round((successCount / MOCK_LOGS.length) * 1000) / 10}%`}
+					value={statsSuccessRate}
 					sub="+0.3% improvement"
 					subColor="#22c55e"
 				/>
@@ -557,7 +839,7 @@ const LogsPage = () => {
 					iconBg="#fee2e2"
 					iconColor="#dc2626"
 					label="Failed Actions"
-					value={String(failedCount)}
+					value={statsFailedCount}
 					sub="Requires attention"
 					subColor="#ef4444"
 				/>
@@ -566,12 +848,12 @@ const LogsPage = () => {
 					iconBg="#ede9fe"
 					iconColor="#7c3aed"
 					label="API Calls"
-					value="645"
-					sub="Today's activity"
+					value={statsApiCalls}
+					sub="Last 7 days"
 				/>
 			</div>
 
-			{/* Charts row */}
+			{/* ── Charts ───────────────────────────────────────────────────── */}
 			<div className="grid gap-4 xl:grid-cols-[1fr_500px]">
 				{/* Activity Trend */}
 				<div className="rounded-2xl bg-white border border-slate-100 shadow-xs dark:border-slate-800 dark:bg-slate-950 p-5">
@@ -593,10 +875,13 @@ const LogsPage = () => {
 								align="end"
 								className="w-44 rounded-xl p-1.5 max-h-64 overflow-y-auto dark:bg-slate-900 dark:border-slate-800"
 							>
-								{TABLE_OPTIONS.map((t) => (
+								{tableOptions.map((t) => (
 									<DropdownMenuItem
 										key={t}
-										onClick={() => setTable(t)}
+										onClick={() => {
+											setTable(t);
+											setPage(1);
+										}}
 										className={clsx(
 											"flex items-center justify-between rounded-lg text-[12px] cursor-pointer",
 											tableFilter === t && "font-semibold"
@@ -613,7 +898,7 @@ const LogsPage = () => {
 					</div>
 					<ResponsiveContainer width="100%" height={300}>
 						<LineChart
-							data={ACTIVITY_DATA}
+							data={activityData}
 							margin={{ top: 4, right: 8, left: -24, bottom: 0 }}
 						>
 							<CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -672,7 +957,7 @@ const LogsPage = () => {
 						<ResponsiveContainer width="100%" height={250}>
 							<PieChart>
 								<Pie
-									data={DISTRIBUTION_DATA}
+									data={distributionData}
 									cx="50%"
 									cy="50%"
 									innerRadius={0}
@@ -692,7 +977,7 @@ const LogsPage = () => {
 						</ResponsiveContainer>
 					</div>
 					<div className="mt-2 space-y-2">
-						{DISTRIBUTION_DATA.map((d, i) => (
+						{distributionData.map((d, i) => (
 							<div
 								key={d.name}
 								className="flex items-center justify-between text-[12px]"
@@ -715,12 +1000,12 @@ const LogsPage = () => {
 				</div>
 			</div>
 
-			{/* Filters & Table */}
+			{/* ── Filters & Table ───────────────────────────────────────────── */}
 			<div className="rounded-2xl bg-white border border-slate-100 shadow-xs dark:border-slate-800 dark:bg-slate-950 overflow-hidden">
 				{/* Filter header */}
 				<div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
 					<h3 className="text-[14px] font-bold text-slate-800 dark:text-slate-100">
-						Filters & Search
+						Filters &amp; Search
 					</h3>
 					<div className="flex items-center gap-2">
 						<button
@@ -763,7 +1048,7 @@ const LogsPage = () => {
 					</div>
 				</div>
 
-				{/* Expanded filter pills */}
+				{/* Filter pills */}
 				{showFilters && (
 					<div className="flex flex-wrap items-center gap-2 px-5 py-3 border-b border-slate-100 dark:border-slate-800">
 						<FilterDropdown
@@ -821,7 +1106,23 @@ const LogsPage = () => {
 							</tr>
 						</thead>
 						<tbody>
-							{paginated.length === 0 ? (
+							{loadingLogs && !usingMock ? (
+								Array.from({ length: PAGE_SIZE }).map((_, i) => (
+									<tr
+										key={i}
+										className="border-b border-slate-50 dark:border-slate-800/50 animate-pulse"
+									>
+										{Array.from({ length: 8 }).map((__, j) => (
+											<td key={j} className="px-5 py-4">
+												<div
+													className="h-3 rounded bg-slate-100 dark:bg-slate-800"
+													style={{ width: `${60 + ((j * 13) % 40)}%` }}
+												/>
+											</td>
+										))}
+									</tr>
+								))
+							) : paginated.length === 0 ? (
 								<tr>
 									<td
 										colSpan={8}
@@ -837,7 +1138,10 @@ const LogsPage = () => {
 										className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-slate-800/50 dark:hover:bg-slate-900/40"
 									>
 										<td className="px-5 py-3.5 text-[12px] text-slate-400 whitespace-nowrap font-mono">
-											{log.timestamp}
+											{typeof log.timestamp === "string" &&
+											log.timestamp.includes("T")
+												? new Date(log.timestamp).toLocaleString()
+												: log.timestamp}
 										</td>
 										<td className="px-5 py-3.5 text-[12px] font-semibold text-slate-700 dark:text-slate-200">
 											{log.table}
@@ -849,7 +1153,7 @@ const LogsPage = () => {
 											<span
 												className={clsx(
 													"inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold",
-													ACTION_STYLES[log.action]
+													getActionStyle(log.action)
 												)}
 											>
 												{log.action}
@@ -881,7 +1185,7 @@ const LogsPage = () => {
 														SUCCESS
 													</span>
 												</div>
-											) : (
+											) : log.status === "FAILED" ? (
 												<div>
 													<div className="flex items-center gap-1.5">
 														<XCircle className="h-4 w-4 text-red-500 shrink-0" />
@@ -894,6 +1198,20 @@ const LogsPage = () => {
 															{log.errorMsg}
 														</p>
 													)}
+												</div>
+											) : (
+												<div>
+													<div className="flex items-center gap-1.5">
+														<Clock className="h-4 w-4 text-orange-400 shrink-0" />
+														<span className="text-[12px] font-semibold text-orange-400">
+															PENDING
+														</span>
+													</div>
+													{/* {log.errorMsg && (
+														<p className="text-[10px] text-red-400 mt-0.5 max-w-45">
+															{log.errorMsg}
+														</p>
+													)} */}
 												</div>
 											)}
 										</td>
@@ -916,14 +1234,19 @@ const LogsPage = () => {
 						</span>{" "}
 						of{" "}
 						<span className="font-semibold text-slate-600 dark:text-slate-300">
-							{filtered.length}
+							{displayTotal}
 						</span>{" "}
 						logs
+						{usingMock && (
+							<span className="ml-2 text-[11px] text-amber-500 font-medium">
+								(preview data)
+							</span>
+						)}
 					</p>
 					<PaginationBar
 						currentPage={page}
 						totalPages={totalPages}
-						totalItems={filtered.length}
+						totalItems={displayTotal}
 						itemName="logs"
 						pageSize={PAGE_SIZE}
 						onPageChange={setPage}
