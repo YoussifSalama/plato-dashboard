@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
 	ArrowLeft,
 	Search,
 	ChevronDown,
 	Check,
+	Loader2,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -16,6 +17,8 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import PaginationBar from "@/shared/common/features/PaginationBar";
+import { apiClient } from "@/lib/apiClient";
+import { errorToast } from "@/shared/helper/toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,82 +29,119 @@ type Transaction = {
 	company: string;
 	plan: string;
 	amount: string;
-	amountRaw: number;
 	date: string;
 	status: TxStatus;
 };
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const MOCK_TRANSACTIONS: Transaction[] = [
-	{ id: 1,  company: "Acme Corp",          plan: "Pro",        amount: "$99.00",  amountRaw: 99,  date: "Feb 20, 2025", status: "Completed" },
-	{ id: 2,  company: "Tech Solutions",     plan: "Enterprise", amount: "$299.00", amountRaw: 299, date: "Feb 13, 2025", status: "Completed" },
-	{ id: 3,  company: "Global Industries",  plan: "Pro",        amount: "$99.00",  amountRaw: 99,  date: "Feb 13, 2025", status: "Completed" },
-	{ id: 4,  company: "Startup Inc.",       plan: "Basic",      amount: "$29.00",  amountRaw: 29,  date: "Feb 17, 2025", status: "Pending"   },
-	{ id: 5,  company: "Bright Minds Ltd",   plan: "Enterprise", amount: "$299.00", amountRaw: 299, date: "Feb 10, 2025", status: "Completed" },
-	{ id: 6,  company: "Nova Analytics",     plan: "Pro",        amount: "$99.00",  amountRaw: 99,  date: "Feb 09, 2025", status: "Completed" },
-	{ id: 7,  company: "Horizon Co.",        plan: "Basic",      amount: "$29.00",  amountRaw: 29,  date: "Feb 08, 2025", status: "Failed"    },
-	{ id: 8,  company: "Vertex Systems",     plan: "Pro",        amount: "$99.00",  amountRaw: 99,  date: "Feb 07, 2025", status: "Refunded"  },
-	{ id: 9,  company: "Pulse Media",        plan: "Enterprise", amount: "$299.00", amountRaw: 299, date: "Feb 06, 2025", status: "Completed" },
-	{ id: 10, company: "Delta Corp",         plan: "Basic",      amount: "$29.00",  amountRaw: 29,  date: "Feb 05, 2025", status: "Completed" },
-	{ id: 11, company: "Orion Digital",      plan: "Pro",        amount: "$99.00",  amountRaw: 99,  date: "Feb 04, 2025", status: "Pending"   },
-	{ id: 12, company: "Summit Labs",        plan: "Enterprise", amount: "$299.00", amountRaw: 299, date: "Feb 03, 2025", status: "Completed" },
-	{ id: 13, company: "Catalyst Group",     plan: "Pro",        amount: "$99.00",  amountRaw: 99,  date: "Feb 02, 2025", status: "Completed" },
-	{ id: 14, company: "Apex Solutions",     plan: "Basic",      amount: "$29.00",  amountRaw: 29,  date: "Feb 01, 2025", status: "Failed"    },
-	{ id: 15, company: "Stride Technologies",plan: "Pro",        amount: "$99.00",  amountRaw: 99,  date: "Jan 31, 2025", status: "Completed" },
-];
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_OPTIONS: { label: string; value: TxStatus | "all" }[] = [
-	{ label: "All Status",  value: "all"       },
-	{ label: "Completed",   value: "Completed" },
-	{ label: "Pending",     value: "Pending"   },
-	{ label: "Failed",      value: "Failed"    },
-	{ label: "Refunded",    value: "Refunded"  },
+	{ label: "All Status", value: "all" },
+	{ label: "Completed", value: "Completed" },
+	{ label: "Pending", value: "Pending" },
+	{ label: "Failed", value: "Failed" },
+	{ label: "Refunded", value: "Refunded" },
 ];
 
 const PLAN_OPTIONS = [
-	{ label: "All Plans",   value: "all"        },
-	{ label: "Basic",       value: "Basic"      },
-	{ label: "Pro",         value: "Pro"        },
-	{ label: "Enterprise",  value: "Enterprise" },
+	{ label: "All Plans", value: "all" },
+	{ label: "STARTER", value: "STARTER" },
+	{ label: "GROWTH", value: "GROWTH" },
+	{ label: "PRO", value: "PRO" },
+	{ label: "EXTRA", value: "EXTRA" },
+	{ label: "CUSTOM", value: "CUSTOM" },
 ];
 
 const STATUS_STYLES: Record<TxStatus, string> = {
 	Completed: "bg-emerald-500 text-white",
-	Pending:   "bg-amber-400 text-white",
-	Failed:    "bg-red-500 text-white",
-	Refunded:  "bg-slate-400 text-white",
+	Pending: "bg-amber-400 text-white",
+	Failed: "bg-red-500 text-white",
+	Refunded: "bg-slate-400 text-white",
 };
 
 const PAGE_SIZE = 8;
+
+// ─── Row Skeleton ─────────────────────────────────────────────────────────────
+
+const RowSkeleton = () => (
+	<tr className="border-b border-slate-50 dark:border-slate-800/50">
+		{[160, 80, 70, 100, 70].map((w, i) => (
+			<td key={i} className="px-6 py-4">
+				<div
+					className="h-4 animate-pulse rounded bg-slate-100 dark:bg-slate-800"
+					style={{ width: w }}
+				/>
+			</td>
+		))}
+	</tr>
+);
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const AllTransactionsPage = () => {
 	const router = useRouter();
-	const [search, setSearch]       = useState("");
+	const [transactions, setTransactions] = useState<Transaction[]>([]);
+	const [total, setTotal] = useState(0);
+	const [loading, setLoading] = useState(true);
+	const [search, setSearch] = useState("");
 	const [statusFilter, setStatus] = useState<TxStatus | "all">("all");
-	const [planFilter, setPlan]     = useState("all");
-	const [page, setPage]           = useState(1);
+	const [planFilter, setPlan] = useState("all");
+	const [page, setPage] = useState(1);
 
-	const filtered = MOCK_TRANSACTIONS.filter((tx) => {
-		const matchSearch =
-			!search || tx.company.toLowerCase().includes(search.toLowerCase());
-		const matchStatus = statusFilter === "all" || tx.status === statusFilter;
-		const matchPlan   = planFilter === "all" || tx.plan === planFilter;
-		return matchSearch && matchStatus && matchPlan;
-	});
+	const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-	const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-	const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+	const loadTransactions = useCallback(
+		async (opts: {
+			page: number;
+			search: string;
+			status: TxStatus | "all";
+			plan: string;
+		}) => {
+			setLoading(true);
+			try {
+				const params = new URLSearchParams({
+					page: String(opts.page),
+					limit: String(PAGE_SIZE),
+				});
+				if (opts.search) params.set("search", opts.search);
+				if (opts.status !== "all") params.set("status", opts.status);
+				if (opts.plan !== "all") params.set("plan", opts.plan);
 
-	const selectedStatus = STATUS_OPTIONS.find((o) => o.value === statusFilter)!;
-	const selectedPlan   = PLAN_OPTIONS.find((o) => o.value === planFilter)!;
+				const res = await apiClient.get(`/api/subscriptions/transactions?${params}`);
+				setTransactions(res.data.data.transactions);
+				setTotal(res.data.data.total);
+			} catch {
+				errorToast("Failed to load transactions");
+			} finally {
+				setLoading(false);
+			}
+		},
+		[]
+	);
+
+	// Reload when filters/page change
+	useEffect(() => {
+		loadTransactions({ page, search, status: statusFilter, plan: planFilter });
+	}, [page, statusFilter, planFilter, loadTransactions]); // search is debounced separately
+
+	// Debounce search
+	const handleSearch = (value: string) => {
+		setSearch(value);
+		if (searchTimeout.current) clearTimeout(searchTimeout.current);
+		searchTimeout.current = setTimeout(() => {
+			setPage(1);
+			loadTransactions({ page: 1, search: value, status: statusFilter, plan: planFilter });
+		}, 350);
+	};
 
 	const handleFilterChange = (fn: () => void) => {
 		fn();
 		setPage(1);
 	};
+
+	const selectedStatus = STATUS_OPTIONS.find((o) => o.value === statusFilter)!;
+	const selectedPlan = PLAN_OPTIONS.find((o) => o.value === planFilter)!;
+	const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
 	return (
 		<section className="space-y-6 w-full">
@@ -134,9 +174,10 @@ const AllTransactionsPage = () => {
 						type="text"
 						placeholder="Search by company..."
 						value={search}
-						onChange={(e) => handleFilterChange(() => setSearch(e.target.value))}
+						onChange={(e) => handleSearch(e.target.value)}
 						className="w-full bg-transparent text-[13px] text-slate-700 placeholder:text-slate-400 outline-none dark:text-slate-200"
 					/>
+					{loading && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-slate-400" />}
 				</div>
 
 				<div className="h-6 w-px bg-slate-200 dark:bg-slate-800 shrink-0" />
@@ -152,7 +193,10 @@ const AllTransactionsPage = () => {
 							<ChevronDown className="h-3.5 w-3.5 text-slate-400" />
 						</button>
 					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end" className="w-40 rounded-xl p-1.5 dark:bg-slate-900 dark:border-slate-800">
+					<DropdownMenuContent
+						align="end"
+						className="w-40 rounded-xl p-1.5 dark:bg-slate-900 dark:border-slate-800"
+					>
 						{STATUS_OPTIONS.map((opt) => (
 							<DropdownMenuItem
 								key={opt.value}
@@ -163,7 +207,9 @@ const AllTransactionsPage = () => {
 								)}
 							>
 								{opt.label}
-								{statusFilter === opt.value && <Check className="h-3.5 w-3.5 text-blue-500" />}
+								{statusFilter === opt.value && (
+									<Check className="h-3.5 w-3.5 text-blue-500" />
+								)}
 							</DropdownMenuItem>
 						))}
 					</DropdownMenuContent>
@@ -180,7 +226,10 @@ const AllTransactionsPage = () => {
 							<ChevronDown className="h-3.5 w-3.5 text-slate-400" />
 						</button>
 					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end" className="w-40 rounded-xl p-1.5 dark:bg-slate-900 dark:border-slate-800">
+					<DropdownMenuContent
+						align="end"
+						className="w-40 rounded-xl p-1.5 dark:bg-slate-900 dark:border-slate-800"
+					>
 						{PLAN_OPTIONS.map((opt) => (
 							<DropdownMenuItem
 								key={opt.value}
@@ -191,7 +240,9 @@ const AllTransactionsPage = () => {
 								)}
 							>
 								{opt.label}
-								{planFilter === opt.value && <Check className="h-3.5 w-3.5 text-blue-500" />}
+								{planFilter === opt.value && (
+									<Check className="h-3.5 w-3.5 text-blue-500" />
+								)}
 							</DropdownMenuItem>
 						))}
 					</DropdownMenuContent>
@@ -214,14 +265,19 @@ const AllTransactionsPage = () => {
 						</tr>
 					</thead>
 					<tbody>
-						{paginated.length === 0 ? (
+						{loading ? (
+							[...Array(PAGE_SIZE)].map((_, i) => <RowSkeleton key={i} />)
+						) : transactions.length === 0 ? (
 							<tr>
-								<td colSpan={5} className="py-16 text-center text-[14px] text-slate-400">
+								<td
+									colSpan={5}
+									className="py-16 text-center text-[14px] text-slate-400"
+								>
 									No transactions found.
 								</td>
 							</tr>
 						) : (
-							paginated.map((tx) => (
+							transactions.map((tx) => (
 								<tr
 									key={tx.id}
 									className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-slate-800/50 dark:hover:bg-slate-900/40"
@@ -254,12 +310,12 @@ const AllTransactionsPage = () => {
 					</tbody>
 				</table>
 
-				{filtered.length > 0 && (
+				{total > 0 && (
 					<div className="mt-2 px-2">
 						<PaginationBar
 							currentPage={page}
 							totalPages={totalPages}
-							totalItems={filtered.length}
+							totalItems={total}
 							itemName="transactions"
 							pageSize={PAGE_SIZE}
 							onPageChange={setPage}

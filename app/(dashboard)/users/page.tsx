@@ -120,6 +120,19 @@ const UsersPage = () => {
 		type: "all",
 	});
 
+	// ── Subscription plans ────────────────────────────────────────────────────
+	const [plans, setPlans] = useState<{ name: string; display_name: string }[]>([]);
+
+	useEffect(() => {
+		apiClient
+			.get("/api/subscriptions/plans")
+			.then((res) => {
+				const data = res.data?.data?.plans ?? [];
+				setPlans(data.map((p: { name: string; display_name: string }) => ({ name: p.name, display_name: p.display_name })));
+			})
+			.catch(() => {/* fallback: dropdown stays empty */});
+	}, []);
+
 	// ── Add modal state ───────────────────────────────────────────────────────
 	const [addModalOpen, setAddModalOpen] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
@@ -654,11 +667,9 @@ const UsersPage = () => {
 									}
 								>
 									<option value="">Select a plan</option>
-									{(
-										["STARTER", "GROWTH", "PRO", "EXTRA", "CUSTOM"] as const
-									).map((plan) => (
-										<option key={plan} value={plan}>
-											{plan.charAt(0) + plan.slice(1).toLowerCase()} Plan
+									{plans.map((plan) => (
+										<option key={plan.name} value={plan.name}>
+											{plan.display_name}
 										</option>
 									))}
 								</select>

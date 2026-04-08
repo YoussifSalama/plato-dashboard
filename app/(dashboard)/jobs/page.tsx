@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import JobTable from "@/shared/components/pages/job/JobTable";
 import { useJobStore } from "@/shared/store/pages/job/useJobStore";
-import type { JobListItem } from "@/shared/store/pages/job/useJobStore";
 import PaginationBar from "@/shared/common/features/PaginationBar";
 import { Search, Plus, Filter, ChevronDown, Check } from "lucide-react";
 import {
@@ -16,97 +15,35 @@ import {
 } from "@/components/ui/dropdown-menu";
 import clsx from "clsx";
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const MOCK_JOBS: JobListItem[] = [
-	{
-		id: 1,
-		title: "Senior Frontend Developer",
-		workplace_type: "remote",
-		employment_type: "full_time",
-		seniority_level: "senior",
-		industry: "Engineering",
-		location: "Remote",
-		is_active: true,
-		effective_is_active: true,
-		inactive_reason: null,
-		created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-		applicants_count: 45,
-	},
-	{
-		id: 2,
-		title: "Product Designer",
-		workplace_type: "onsite",
-		employment_type: "full_time",
-		seniority_level: "mid",
-		industry: "Design",
-		location: "New York, NY",
-		is_active: true,
-		effective_is_active: true,
-		inactive_reason: null,
-		created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-		applicants_count: 32,
-	},
-	{
-		id: 3,
-		title: "Marketing Manager",
-		workplace_type: "hybrid",
-		employment_type: "full_time",
-		seniority_level: "mid",
-		industry: "Marketing",
-		location: "San Francisco, CA",
-		is_active: true,
-		effective_is_active: true,
-		inactive_reason: null,
-		created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-		applicants_count: 28,
-	},
-	{
-		id: 4,
-		title: "Backend Engineer",
-		workplace_type: "remote",
-		employment_type: "contract",
-		seniority_level: "senior",
-		industry: "Engineering",
-		location: "Remote",
-		is_active: false,
-		effective_is_active: false,
-		inactive_reason: null,
-		created_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-		applicants_count: 0,
-	},
-	{
-		id: 5,
-		title: "HR Specialist",
-		workplace_type: "onsite",
-		employment_type: "part_time",
-		seniority_level: "junior",
-		industry: "Human Resources",
-		location: "Boston, MA",
-		is_active: false,
-		effective_is_active: false,
-		inactive_reason: "manual_inactive",
-		created_at: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString(),
-		applicants_count: 67,
-	},
-];
+// ─── Filter options ────────────────────────────────────────────────────────────
 
 const TYPE_OPTIONS = [
 	{ label: "All types", value: "all" },
 	{ label: "Full-time", value: "full_time" },
 	{ label: "Part-time", value: "part_time" },
 	{ label: "Contract", value: "contract" },
+	{ label: "Freelance", value: "freelance" },
 	{ label: "Internship", value: "internship" },
 ];
 
 const DEPARTMENT_OPTIONS = [
-	{ label: "All department", value: "all" },
-	{ label: "Engineering", value: "Engineering" },
-	{ label: "Design", value: "Design" },
-	{ label: "Marketing", value: "Marketing" },
-	{ label: "Human Resources", value: "Human Resources" },
-	{ label: "Finance", value: "Finance" },
-	{ label: "Sales", value: "Sales" },
+	{ label: "All departments", value: "all" },
+	{ label: "Technology", value: "technology" },
+	{ label: "Marketing", value: "marketing" },
+	{ label: "Education", value: "education" },
+	{ label: "Finance", value: "finance" },
+	{ label: "Legal", value: "legal" },
+	{ label: "Healthcare", value: "healthcare" },
+	{ label: "Retail", value: "retail" },
+	{ label: "Manufacturing", value: "manufacturing" },
+	{ label: "Consulting", value: "consulting" },
+	{ label: "Real estate", value: "real_estate" },
+	{ label: "Media", value: "media" },
+	{ label: "Government", value: "government" },
+	{ label: "Non-profit", value: "non_profit" },
+	{ label: "Construction", value: "construction" },
+	{ label: "Transportation", value: "transportation" },
+	{ label: "Other", value: "other" },
 ];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -120,10 +57,10 @@ type JobFilterState = {
 	page: number;
 };
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 10;
 
 const JobsPage = () => {
-	const { jobs, loadingJobs, hasLoadedJobs, meta, getJobs } = useJobStore();
+	const { jobs, loadingJobs, hasLoadedJobs, meta, getAdminJobs } = useJobStore();
 	const [filters, setFilters] = useState<JobFilterState>({
 		search: "",
 		type: "all",
@@ -139,40 +76,18 @@ const JobsPage = () => {
 		if (lastQueryRef.current === queryKey) return;
 		lastQueryRef.current = queryKey;
 
-		getJobs(
+		getAdminJobs(
 			filters.search,
 			filters.sort_by,
 			filters.sort_order,
 			filters.page,
-			null,
-			filters.department === "all" ? "" : filters.department
+			filters.department === "all" ? null : filters.department,
+			filters.type === "all" ? null : filters.type
 		);
-	}, [filters, getJobs]);
+	}, [filters, getAdminJobs]);
 
-	const usingMock = hasLoadedJobs && jobs.length === 0;
-
-	// Client-side filter mock data by search/type/department
-	const displayJobs: JobListItem[] = usingMock
-		? MOCK_JOBS.filter((j) => {
-				const matchSearch =
-					!filters.search ||
-					j.title.toLowerCase().includes(filters.search.toLowerCase());
-				const matchType =
-					filters.type === "all" || j.employment_type === filters.type;
-				const matchDept =
-					filters.department === "all" || j.industry === filters.department;
-				return matchSearch && matchType && matchDept;
-			})
-		: jobs;
-
-	const pagedMock = usingMock
-		? displayJobs.slice((filters.page - 1) * PAGE_SIZE, filters.page * PAGE_SIZE)
-		: jobs;
-
-	const totalItems = usingMock ? displayJobs.length : (meta?.total ?? 0);
-	const totalPages = usingMock
-		? Math.max(1, Math.ceil(displayJobs.length / PAGE_SIZE))
-		: (meta?.total_pages ?? 1);
+	const totalItems = meta?.total ?? 0;
+	const totalPages = meta?.total_pages ?? 1;
 
 	const selectedType =
 		TYPE_OPTIONS.find((o) => o.value === filters.type) ?? TYPE_OPTIONS[0];
@@ -189,7 +104,7 @@ const JobsPage = () => {
 						Jobs
 					</h2>
 					<p className="text-[14px] text-slate-500 mt-0.5 dark:text-slate-400">
-						Manage your job postings and track applications
+						Manage job postings across all companies
 					</p>
 				</div>
 				<Button
@@ -306,12 +221,8 @@ const JobsPage = () => {
 
 			{/* Table */}
 			<div className="rounded-[20px] bg-white shadow-xs border border-slate-100 dark:border-slate-800 dark:bg-slate-950 overflow-hidden pb-4">
-				<JobTable
-					jobs={usingMock ? pagedMock : jobs}
-					loading={loadingJobs}
-					hasLoaded={hasLoadedJobs}
-				/>
-				{(totalItems > 0 || usingMock) && (
+				<JobTable jobs={jobs} loading={loadingJobs} hasLoaded={hasLoadedJobs} />
+				{totalItems > 0 && (
 					<div className="mt-2 px-2">
 						<PaginationBar
 							currentPage={filters.page}

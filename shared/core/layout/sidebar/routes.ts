@@ -61,11 +61,11 @@ export const sidebarRoutes: ISidebarRoute[] = [
 		icon: Gift,
 		href: "/vouchers",
 	},
-	{
-		label: "Content",
-		icon: FileText,
-		href: "/content",
-	},
+	// {
+	// 	label: "Content",
+	// 	icon: FileText,
+	// 	href: "/content",
+	// },
 	{
 		label: "Analytics",
 		icon: ChartColumn,

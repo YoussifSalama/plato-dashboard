@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { startSystemLog, finalizeLog, getRequestIp } from "@/lib/system-logger";
 
 const CreateAdminSchema = z.object({
 	email: z.string().email(),
@@ -54,23 +55,38 @@ export async function POST(request: NextRequest) {
 
 	const password_hash = await bcrypt.hash(password, 12);
 
-	const admin = await prisma.admin.create({
-		data: {
-			email,
-			f_name,
-			l_name,
-			user_name,
-			credential: { create: { password_hash } },
-		},
-		select: {
-			id: true,
-			email: true,
-			f_name: true,
-			l_name: true,
-			user_name: true,
-			created_at: true,
-		},
+	const logId = await startSystemLog({
+		action: "CREATE",
+		tableName: "admins",
+		changedBy: "system",
+		changedByRole: "system",
+		source: "API",
+		method: "POST",
+		path: request.nextUrl.pathname,
+		ip: getRequestIp(request),
 	});
-
-	return Response.json({ data: admin }, { status: 201 });
+	try {
+		const admin = await prisma.admin.create({
+			data: {
+				email,
+				f_name,
+				l_name,
+				user_name,
+				credential: { create: { password_hash } },
+			},
+			select: {
+				id: true,
+				email: true,
+				f_name: true,
+				l_name: true,
+				user_name: true,
+				created_at: true,
+			},
+		});
+		finalizeLog(logId, "SUCCESS", admin.id);
+		return Response.json({ data: admin }, { status: 201 });
+	} catch (err) {
+		finalizeLog(logId, "FAILED", undefined, err instanceof Error ? err.message : "Unknown error");
+		return Response.json({ message: "Internal server error" }, { status: 500 });
+	}
 }

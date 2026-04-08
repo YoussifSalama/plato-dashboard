@@ -119,7 +119,7 @@ const UserTable = ({
 					) : (
 						users.map((user) => (
 							<TableRow
-								key={user.id}
+								key={`${user.id}-${user.type}`}
 								className="border-b border-slate-100 hover:bg-slate-50/50 dark:border-slate-800 dark:hover:bg-slate-900/50"
 							>
 								{/* User */}
@@ -172,12 +172,12 @@ const UserTable = ({
 								{/* Actions */}
 								<TableCell className="py-4 pr-8">
 									<div className="flex items-center justify-end gap-3">
-										<button
+										{/* <button
 											className="text-slate-400 hover:text-slate-600 transition-colors dark:hover:text-slate-200"
 											title="View user"
 										>
 											<Eye className="h-[18px] w-[18px] stroke-[2.5]" />
-										</button>
+										</button> */}
 										<button
 											onClick={() => onEdit?.(user)}
 											className="text-[#005CA9] hover:text-amber-500 transition-colors"

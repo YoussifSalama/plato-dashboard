@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
 	Gift,
 	BarChart2,
@@ -13,30 +13,40 @@ import {
 	Calendar,
 	Check,
 	AlertTriangle,
+	Loader2,
 } from "lucide-react";
 import clsx from "clsx";
+import { apiClient } from "@/lib/apiClient";
+import { successToast, errorToast } from "@/shared/helper/toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type DiscountType = "Percentage" | "Fixed";
 type VoucherStatus = "Active" | "Expired" | "Inactive";
 
 type Voucher = {
 	id: number;
 	code: string;
 	discount: number;
-	type: DiscountType;
-	usageCount: number;
-	usageLimit: number;
-	expires: string;
+	type: "%" | "$";
+	usage: { used: number; limit: number | null };
+	expires: string | null;
 	status: VoucherStatus;
+	features: string[];
 	plans: string[];
-	description: string;
+	color: string;
+	revenue_impact: number;
+};
+
+type Summary = {
+	active_vouchers: number;
+	total_redemptions: number;
+	revenue_impact: number;
+	expiring_soon: number;
 };
 
 type VoucherForm = {
 	code: string;
-	discountType: DiscountType | "";
+	discountType: "Percentage" | "Fixed" | "";
 	discountValue: string;
 	usageLimit: string;
 	expiryDate: string;
@@ -45,58 +55,7 @@ type VoucherForm = {
 	activateNow: boolean;
 };
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const MOCK_VOUCHERS: Voucher[] = [
-	{
-		id: 1,
-		code: "WELCOME50",
-		discount: 50,
-		type: "Percentage",
-		usageCount: 45,
-		usageLimit: 100,
-		expires: "Mar 31, 2026",
-		status: "Active",
-		plans: ["Pro Plan", "Enterprise Plan"],
-		description: "Welcome discount for new users",
-	},
-	{
-		id: 2,
-		code: "FREEMONTH",
-		discount: 99,
-		type: "Fixed",
-		usageCount: 23,
-		usageLimit: 50,
-		expires: "Apr 15, 2026",
-		status: "Active",
-		plans: ["Pro Plan"],
-		description: "Free month promotion",
-	},
-	{
-		id: 3,
-		code: "SUMMER25",
-		discount: 25,
-		type: "Percentage",
-		usageCount: 67,
-		usageLimit: 200,
-		expires: "Jun 30, 2026",
-		status: "Active",
-		plans: ["Basic Plan", "Pro Plan"],
-		description: "Summer campaign discount",
-	},
-	{
-		id: 4,
-		code: "NEWUSER",
-		discount: 29,
-		type: "Fixed",
-		usageCount: 150,
-		usageLimit: 150,
-		expires: "Feb 28, 2026",
-		status: "Expired",
-		plans: ["Basic Plan"],
-		description: "New user one-time discount",
-	},
-];
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const PLAN_OPTIONS = ["Basic Plan", "Pro Plan", "Enterprise Plan"];
 
@@ -119,6 +78,22 @@ const usagePct = (used: number, limit: number) =>
 const barColor = (pct: number) =>
 	pct >= 100 ? "#ef4444" : pct >= 75 ? "#f97316" : "#22c55e";
 
+const fmtDate = (iso: string | null) => {
+	if (!iso) return "—";
+	return new Date(iso).toLocaleDateString("en-US", {
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+	});
+};
+
+const fmtRevenue = (n: number) =>
+	n >= 1_000_000
+		? `$${(n / 1_000_000).toFixed(1)}M`
+		: n >= 1_000
+			? `$${(n / 1_000).toFixed(1)}K`
+			: `$${n.toFixed(0)}`;
+
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 
 const StatCard = ({
@@ -127,12 +102,14 @@ const StatCard = ({
 	iconColor,
 	label,
 	value,
+	loading,
 }: {
 	icon: React.ReactNode;
 	iconBg: string;
 	iconColor: string;
 	label: string;
 	value: string;
+	loading?: boolean;
 }) => (
 	<div className="flex flex-col gap-4 rounded-2xl bg-white border border-slate-100 p-5 shadow-xs dark:border-slate-800 dark:bg-slate-950">
 		<div
@@ -145,16 +122,30 @@ const StatCard = ({
 			<p className="text-[14px] font-medium text-slate-400 dark:text-slate-500">
 				{label}
 			</p>
-			<p className="mt-0.5 text-[26px] font-bold text-slate-900 dark:text-slate-50 leading-tight">
-				{value}
-			</p>
+			{loading ? (
+				<div className="h-8 w-16 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800" />
+			) : (
+				<p className="mt-0.5 text-[26px] font-bold text-slate-900 dark:text-slate-50 leading-tight">
+					{value}
+				</p>
+			)}
 		</div>
 	</div>
 );
 
 // ─── Usage Bar ────────────────────────────────────────────────────────────────
 
-const UsageBar = ({ used, limit }: { used: number; limit: number }) => {
+const UsageBar = ({ used, limit }: { used: number; limit: number | null }) => {
+	if (limit === null) {
+		return (
+			<div className="flex flex-col gap-1 min-w-36">
+				<span className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">
+					{used} / ∞
+				</span>
+				<div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800" />
+			</div>
+		);
+	}
 	const p = usagePct(used, limit);
 	const color = barColor(p);
 	return (
@@ -163,10 +154,7 @@ const UsageBar = ({ used, limit }: { used: number; limit: number }) => {
 				<span className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">
 					{used} / {limit}
 				</span>
-				<span
-					className="text-[10px] font-semibold"
-					style={{ color: "#718096" }}
-				>
+				<span className="text-[10px] font-semibold" style={{ color: "#718096" }}>
 					{p}%
 				</span>
 			</div>
@@ -206,10 +194,12 @@ const DeactivateModal = ({
 	voucher,
 	onCancel,
 	onConfirm,
+	loading,
 }: {
 	voucher: Voucher;
 	onCancel: () => void;
 	onConfirm: () => void;
+	loading: boolean;
 }) => (
 	<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
 		<div className="w-full max-w-sm rounded-2xl bg-white shadow-xl dark:bg-slate-900 dark:border dark:border-slate-800 mx-4 p-6">
@@ -236,14 +226,17 @@ const DeactivateModal = ({
 			<div className="flex items-center justify-end gap-2">
 				<button
 					onClick={onCancel}
-					className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+					disabled={loading}
+					className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
 				>
 					Cancel
 				</button>
 				<button
 					onClick={onConfirm}
-					className="rounded-xl bg-red-500 px-4 py-2 text-[13px] font-semibold text-white hover:bg-red-600 transition-colors"
+					disabled={loading}
+					className="inline-flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2 text-[13px] font-semibold text-white hover:bg-red-600 transition-colors disabled:opacity-50"
 				>
+					{loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
 					Deactivate
 				</button>
 			</div>
@@ -257,10 +250,12 @@ const VoucherModal = ({
 	initial,
 	onClose,
 	onSave,
+	saving,
 }: {
 	initial: VoucherForm & { id?: number };
 	onClose: () => void;
 	onSave: (form: VoucherForm & { id?: number }) => void;
+	saving: boolean;
 }) => {
 	const [form, setForm] = useState<VoucherForm & { id?: number }>(initial);
 	const isEdit = Boolean(initial.id);
@@ -280,7 +275,6 @@ const VoucherModal = ({
 		form.code.trim() &&
 		form.discountType &&
 		form.discountValue &&
-		form.usageLimit &&
 		form.expiryDate;
 
 	return (
@@ -290,17 +284,16 @@ const VoucherModal = ({
 				<div className="sticky top-0 z-10 flex items-start justify-between bg-white px-6 pt-6 pb-4 dark:bg-slate-900">
 					<div>
 						<h2 className="text-[17px] font-bold text-slate-900 dark:text-slate-50">
-							{isEdit ? `Edit Voucher` : "Create New Voucher"}
+							{isEdit ? "Edit Voucher" : "Create New Voucher"}
 						</h2>
 						<p className="text-[12px] text-slate-400 mt-0.5">
-							{isEdit
-								? "Update voucher details"
-								: "Set up a new promotional code"}
+							{isEdit ? "Update voucher details" : "Set up a new promotional code"}
 						</p>
 					</div>
 					<button
 						onClick={onClose}
-						className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors dark:hover:bg-slate-800"
+						disabled={saving}
+						className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors dark:hover:bg-slate-800 disabled:opacity-50"
 					>
 						<X className="h-4 w-4" />
 					</button>
@@ -330,7 +323,7 @@ const VoucherModal = ({
 								Discount Type <span className="text-red-500">*</span>
 							</label>
 							<div className="mt-1.5 flex rounded-xl border border-slate-200 overflow-hidden dark:border-slate-700">
-								{(["Percentage", "Fixed"] as DiscountType[]).map((t) => (
+								{(["Percentage", "Fixed"] as const).map((t) => (
 									<button
 										key={t}
 										type="button"
@@ -359,7 +352,7 @@ const VoucherModal = ({
 									type="number"
 									value={form.discountValue}
 									onChange={(e) => set("discountValue", e.target.value)}
-									placeholder="e.g., 50 or 99"
+									placeholder="e.g., 50"
 									className="flex-1 bg-transparent px-2 py-2.5 text-[13px] text-slate-800 outline-none placeholder:text-slate-300 dark:text-slate-100"
 								/>
 							</div>
@@ -370,17 +363,18 @@ const VoucherModal = ({
 					<div className="grid grid-cols-2 gap-3">
 						<div>
 							<label className="text-[12px] font-semibold text-slate-600 dark:text-slate-400">
-								Usage Limit <span className="text-red-500">*</span>
+								Usage Limit{" "}
+								<span className="font-normal text-slate-400">(Optional)</span>
 							</label>
 							<input
 								type="number"
 								value={form.usageLimit}
 								onChange={(e) => set("usageLimit", e.target.value)}
-								placeholder="e.g., 100"
+								placeholder="Unlimited"
 								className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] text-slate-800 placeholder:text-slate-300 outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
 							/>
 							<p className="mt-1 text-[11px] text-slate-400">
-								Total number of times this code can be used
+								Leave empty for unlimited uses
 							</p>
 						</div>
 						<div>
@@ -406,10 +400,7 @@ const VoucherModal = ({
 						</label>
 						<div className="space-y-2">
 							{PLAN_OPTIONS.map((plan) => (
-								<label
-									key={plan}
-									className="flex items-center gap-2.5 cursor-pointer"
-								>
+								<label key={plan} className="flex items-center gap-2.5 cursor-pointer">
 									<div
 										onClick={() => togglePlan(plan)}
 										className={clsx(
@@ -466,15 +457,17 @@ const VoucherModal = ({
 					<div className="flex items-center justify-end gap-2 pt-2">
 						<button
 							onClick={onClose}
-							className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+							disabled={saving}
+							className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
 						>
 							Cancel
 						</button>
 						<button
 							onClick={() => valid && onSave(form)}
-							disabled={!valid}
-							className="rounded-xl bg-[#005ca9] px-5 py-2 text-[13px] font-semibold text-white hover:bg-[#004e8f] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+							disabled={!valid || saving}
+							className="inline-flex items-center gap-2 rounded-xl bg-[#005ca9] px-5 py-2 text-[13px] font-semibold text-white hover:bg-[#004e8f] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
 						>
+							{saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
 							{isEdit ? "Save Changes" : "Create Voucher"}
 						</button>
 					</div>
@@ -484,31 +477,65 @@ const VoucherModal = ({
 	);
 };
 
+// ─── Row Skeleton ─────────────────────────────────────────────────────────────
+
+const RowSkeleton = () => (
+	<tr className="border-b border-slate-50 dark:border-slate-800/50">
+		{[120, 60, 70, 160, 90, 70, 110].map((w, i) => (
+			<td key={i} className="px-6 py-4">
+				<div
+					className="h-4 animate-pulse rounded bg-slate-100 dark:bg-slate-800"
+					style={{ width: w }}
+				/>
+			</td>
+		))}
+	</tr>
+);
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const VouchersPage = () => {
-	const [vouchers, setVouchers] = useState<Voucher[]>(MOCK_VOUCHERS);
-	const [modalForm, setModalForm] = useState<
-		(VoucherForm & { id?: number }) | null
-	>(null);
+	const [vouchers, setVouchers] = useState<Voucher[]>([]);
+	const [summary, setSummary] = useState<Summary | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [modalForm, setModalForm] = useState<(VoucherForm & { id?: number }) | null>(null);
 	const [deactivating, setDeactivating] = useState<Voucher | null>(null);
+	const [saving, setSaving] = useState(false);
+	const [toggling, setToggling] = useState<number | null>(null);
 	const [copied, setCopied] = useState<number | null>(null);
 
-	// Derived stats
-	const activeCount = vouchers.filter((v) => v.status === "Active").length;
-	const totalRedemptions = vouchers.reduce((s, v) => s + v.usageCount, 0);
-	const revenueImpact = vouchers.reduce(
-		(s, v) =>
-			s +
-			v.usageCount * (v.type === "Percentage" ? v.discount * 3 : v.discount),
-		0
-	);
-	const now = new Date().getTime();
-	const expiringSoon = vouchers.filter((v) => {
-		if (v.status !== "Active") return false;
-		const diff = (new Date(v.expires).getTime() - now) / (1000 * 60 * 60 * 24);
-		return diff <= 30;
-	}).length;
+	// ── Load data ──────────────────────────────────────────────────────────────
+
+	const loadData = useCallback(async () => {
+		setLoading(true);
+		try {
+			const [summaryRes, listRes] = await Promise.all([
+				apiClient.get("/api/vouchers?summary=1"),
+				apiClient.get("/api/vouchers?limit=50"),
+			]);
+			setSummary(summaryRes.data.data);
+			setVouchers(listRes.data.data.vouchers);
+		} catch {
+			errorToast("Failed to load vouchers");
+		} finally {
+			setLoading(false);
+		}
+	}, []);
+
+	const refreshSummary = useCallback(async () => {
+		try {
+			const res = await apiClient.get("/api/vouchers?summary=1");
+			setSummary(res.data.data);
+		} catch {
+			// silent — summary is supplemental
+		}
+	}, []);
+
+	useEffect(() => {
+		loadData();
+	}, [loadData]);
+
+	// ── Copy code ──────────────────────────────────────────────────────────────
 
 	const copyCode = (id: number, code: string) => {
 		navigator.clipboard.writeText(code).catch(() => {});
@@ -516,78 +543,101 @@ const VouchersPage = () => {
 		setTimeout(() => setCopied(null), 1500);
 	};
 
+	// ── Open modals ────────────────────────────────────────────────────────────
+
 	const openCreate = () => setModalForm({ ...EMPTY_FORM });
 
 	const openEdit = (v: Voucher) =>
 		setModalForm({
 			id: v.id,
 			code: v.code,
-			discountType: v.type,
+			discountType: v.type === "%" ? "Percentage" : "Fixed",
 			discountValue: String(v.discount),
-			usageLimit: String(v.usageLimit),
-			expiryDate: "",
+			usageLimit: v.usage.limit !== null ? String(v.usage.limit) : "",
+			expiryDate: v.expires ? v.expires.substring(0, 10) : "",
 			plans: [...v.plans],
-			description: v.description,
+			description: v.features[0] ?? "",
 			activateNow: v.status === "Active",
 		});
 
-	const handleSave = (form: VoucherForm & { id?: number }) => {
-		if (form.id) {
-			setVouchers((prev) =>
-				prev.map((v) =>
-					v.id === form.id
-						? {
-								...v,
-								code: form.code,
-								discount: parseFloat(form.discountValue) || v.discount,
-								type: form.discountType as DiscountType,
-								usageLimit: parseInt(form.usageLimit) || v.usageLimit,
-								status: form.activateNow ? "Active" : "Inactive",
-								plans: form.plans,
-								description: form.description,
-							}
-						: v
-				)
-			);
-		} else {
-			const newVoucher: Voucher = {
-				id: Date.now(),
+	// ── Save (create / edit) ───────────────────────────────────────────────────
+
+	const handleSave = async (form: VoucherForm & { id?: number }) => {
+		setSaving(true);
+		try {
+			const payload = {
 				code: form.code,
-				discount: parseFloat(form.discountValue) || 0,
-				type: form.discountType as DiscountType,
-				usageCount: 0,
-				usageLimit: parseInt(form.usageLimit) || 0,
-				expires: form.expiryDate
-					? new Date(form.expiryDate).toLocaleDateString("en-US", {
-							month: "short",
-							day: "numeric",
-							year: "numeric",
-						})
-					: "—",
-				status: form.activateNow ? "Active" : "Inactive",
+				discount: parseFloat(form.discountValue),
+				type: form.discountType === "Percentage" ? "PERCENTAGE" : "FIXED",
+				usage_limit: form.usageLimit ? parseInt(form.usageLimit) : null,
+				expires_at: form.expiryDate
+					? new Date(form.expiryDate + "T00:00:00.000Z").toISOString()
+					: null,
+				is_active: form.activateNow,
 				plans: form.plans,
-				description: form.description,
+				features: form.description ? [form.description] : [],
 			};
-			setVouchers((prev) => [newVoucher, ...prev]);
+
+			if (form.id) {
+				await apiClient.put(`/api/vouchers/${form.id}`, payload);
+				successToast("Voucher updated successfully.");
+			} else {
+				await apiClient.post("/api/vouchers", payload);
+				successToast("Voucher created successfully.");
+			}
+
+			setModalForm(null);
+			await loadData();
+		} catch (err: unknown) {
+			const msg =
+				(err as { response?: { data?: { message?: string } } })?.response?.data
+					?.message ?? "Failed to save voucher";
+			errorToast(msg);
+		} finally {
+			setSaving(false);
 		}
-		setModalForm(null);
 	};
 
-	const handleDeactivate = () => {
+	// ── Deactivate ─────────────────────────────────────────────────────────────
+
+	const handleDeactivate = async () => {
 		if (!deactivating) return;
-		setVouchers((prev) =>
-			prev.map((v) =>
-				v.id === deactivating.id ? { ...v, status: "Inactive" } : v
-			)
-		);
-		setDeactivating(null);
+		const id = deactivating.id;
+		setToggling(id);
+		try {
+			await apiClient.patch(`/api/vouchers/${id}`);
+			setVouchers((prev) =>
+				prev.map((v) => (v.id === id ? { ...v, status: "Inactive" } : v))
+			);
+			setDeactivating(null);
+			refreshSummary();
+			successToast("Voucher deactivated.");
+		} catch {
+			errorToast("Failed to deactivate voucher");
+		} finally {
+			setToggling(null);
+		}
 	};
 
-	const handleActivate = (id: number) => {
-		setVouchers((prev) =>
-			prev.map((v) => (v.id === id ? { ...v, status: "Active" } : v))
-		);
+	// ── Activate ───────────────────────────────────────────────────────────────
+
+	const handleActivate = async (id: number) => {
+		setToggling(id);
+		try {
+			await apiClient.patch(`/api/vouchers/${id}`);
+			setVouchers((prev) =>
+				prev.map((v) => (v.id === id ? { ...v, status: "Active" } : v))
+			);
+			refreshSummary();
+			successToast("Voucher activated.");
+		} catch {
+			errorToast("Failed to activate voucher");
+		} finally {
+			setToggling(null);
+		}
 	};
+
+	// ── Render ─────────────────────────────────────────────────────────────────
 
 	return (
 		<section className="space-y-6 w-full">
@@ -617,28 +667,32 @@ const VouchersPage = () => {
 					iconBg="#ede9fe"
 					iconColor="#7c3aed"
 					label="Active Vouchers"
-					value={String(activeCount)}
+					value={String(summary?.active_vouchers ?? 0)}
+					loading={loading && !summary}
 				/>
 				<StatCard
 					icon={<BarChart2 className="h-5 w-5" />}
 					iconBg="#dbeafe"
 					iconColor="#2563eb"
 					label="Total Redemptions"
-					value={totalRedemptions.toLocaleString()}
+					value={(summary?.total_redemptions ?? 0).toLocaleString()}
+					loading={loading && !summary}
 				/>
 				<StatCard
 					icon={<DollarSign className="h-5 w-5" />}
 					iconBg="#dcfce7"
 					iconColor="#16a34a"
 					label="Revenue Impact"
-					value={`$${(revenueImpact / 1000).toFixed(1)}K`}
+					value={fmtRevenue(summary?.revenue_impact ?? 0)}
+					loading={loading && !summary}
 				/>
 				<StatCard
 					icon={<Clock className="h-5 w-5" />}
 					iconBg="#fee2e2"
 					iconColor="#dc2626"
 					label="Expiring Soon"
-					value={String(expiringSoon)}
+					value={String(summary?.expiring_soon ?? 0)}
+					loading={loading && !summary}
 				/>
 			</div>
 
@@ -649,7 +703,7 @@ const VouchersPage = () => {
 						All Vouchers
 					</h3>
 					<span className="text-[12px] text-slate-400">
-						{vouchers.length} voucher{vouchers.length !== 1 ? "s" : ""}
+						{loading ? "Loading…" : `${vouchers.length} voucher${vouchers.length !== 1 ? "s" : ""}`}
 					</span>
 				</div>
 
@@ -657,26 +711,22 @@ const VouchersPage = () => {
 					<table className="w-full min-w-[860px]">
 						<thead>
 							<tr className="border-b border-slate-100 dark:border-slate-800">
-								{[
-									"CODE",
-									"DISCOUNT",
-									"TYPE",
-									"USAGE",
-									"EXPIRES",
-									"STATUS",
-									"ACTIONS",
-								].map((h) => (
-									<th
-										key={h}
-										className="px-6 py-3 text-left text-[10px] font-bold tracking-wider text-slate-400 uppercase"
-									>
-										{h}
-									</th>
-								))}
+								{["CODE", "DISCOUNT", "TYPE", "USAGE", "EXPIRES", "STATUS", "ACTIONS"].map(
+									(h) => (
+										<th
+											key={h}
+											className="px-6 py-3 text-left text-[10px] font-bold tracking-wider text-slate-400 uppercase"
+										>
+											{h}
+										</th>
+									)
+								)}
 							</tr>
 						</thead>
 						<tbody>
-							{vouchers.length === 0 ? (
+							{loading ? (
+								[...Array(4)].map((_, i) => <RowSkeleton key={i} />)
+							) : vouchers.length === 0 ? (
 								<tr>
 									<td
 										colSpan={7}
@@ -713,24 +763,22 @@ const VouchersPage = () => {
 
 										{/* Discount */}
 										<td className="px-6 py-4 text-[13px] font-bold text-emerald-500">
-											{v.type === "Percentage"
-												? `${v.discount}%`
-												: `$${v.discount}`}
+											{v.type === "%" ? `${v.discount}%` : `$${v.discount}`}
 										</td>
 
 										{/* Type */}
 										<td className="px-6 py-4 text-[13px] text-slate-500 dark:text-slate-400">
-											{v.type}
+											{v.type === "%" ? "Percentage" : "Fixed"}
 										</td>
 
 										{/* Usage bar */}
 										<td className="px-6 py-4">
-											<UsageBar used={v.usageCount} limit={v.usageLimit} />
+											<UsageBar used={v.usage.used} limit={v.usage.limit} />
 										</td>
 
 										{/* Expires */}
 										<td className="px-6 py-4 text-[12px] text-slate-400 whitespace-nowrap">
-											{v.expires}
+											{fmtDate(v.expires)}
 										</td>
 
 										{/* Status */}
@@ -751,15 +799,23 @@ const VouchersPage = () => {
 												{v.status === "Active" ? (
 													<button
 														onClick={() => setDeactivating(v)}
-														className="inline-flex items-center gap-1.5 rounded-xl border border-red-100 bg-red-50 px-3 py-1.5 text-[12px] font-semibold text-red-500 hover:bg-red-100 hover:border-red-200 transition-colors dark:border-red-900/30 dark:bg-red-950/20 dark:text-red-400"
+														disabled={toggling === v.id}
+														className="inline-flex items-center gap-1.5 rounded-xl border border-red-100 bg-red-50 px-3 py-1.5 text-[12px] font-semibold text-red-500 hover:bg-red-100 hover:border-red-200 transition-colors disabled:opacity-50 dark:border-red-900/30 dark:bg-red-950/20 dark:text-red-400"
 													>
+														{toggling === v.id ? (
+															<Loader2 className="h-3 w-3 animate-spin" />
+														) : null}
 														Deactivate
 													</button>
 												) : (
 													<button
 														onClick={() => handleActivate(v.id)}
-														className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-semibold text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 transition-colors dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:text-emerald-400"
+														disabled={toggling === v.id}
+														className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-semibold text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 transition-colors disabled:opacity-50 dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:text-emerald-400"
 													>
+														{toggling === v.id ? (
+															<Loader2 className="h-3 w-3 animate-spin" />
+														) : null}
 														Activate
 													</button>
 												)}
@@ -779,6 +835,7 @@ const VouchersPage = () => {
 					initial={modalForm}
 					onClose={() => setModalForm(null)}
 					onSave={handleSave}
+					saving={saving}
 				/>
 			)}
 
@@ -788,6 +845,7 @@ const VouchersPage = () => {
 					voucher={deactivating}
 					onCancel={() => setDeactivating(null)}
 					onConfirm={handleDeactivate}
+					loading={toggling === deactivating.id}
 				/>
 			)}
 		</section>

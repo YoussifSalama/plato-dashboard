@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { verifyAdminRequest } from "@/lib/admin-guard";
+import { startAdminLog, finalizeLog } from "@/lib/system-logger";
 import {
 	sendWelcomeEmail,
 	sendVerifyEmail,
@@ -148,7 +149,9 @@ export async function POST(
 		const password_hash = await bcrypt.hash(password, 12);
 		const user_name = await generateUserName(email.split("@")[0]);
 
+		const logId = await startAdminLog(request, admin.email, { action: "CREATE", tableName: "users", meta: { user_type: "company" } });
 		// Create Agency → Credential → Account in a transaction
+		try {
 		const account = await prisma.$transaction(async (tx) => {
 			const agency = await tx.agency.create({
 				data: { company_name: name },
@@ -213,7 +216,12 @@ export async function POST(
 			}
 		}
 
+		finalizeLog(logId, "SUCCESS", account.id);
 		return Response.json({ data: account }, { status: 201 });
+		} catch (err) {
+			finalizeLog(logId, "FAILED", undefined, err instanceof Error ? err.message : "Unknown error");
+			return Response.json({ message: "Internal server error" }, { status: 500 });
+		}
 	}
 
 	// ── Create Candidate ───────────────────────────────────────────────────────
@@ -261,66 +269,63 @@ export async function POST(
 
 	const password_hash = await bcrypt.hash(password, 12);
 
-	const candidate = await prisma.$transaction(async (tx) => {
-		const credential = await tx.candidateCredential.create({
-			data: { password_hash },
+	const candidateLogId = await startAdminLog(request, admin.email, { action: "CREATE", tableName: "users", meta: { user_type: "candidate" } });
+	try {
+		const candidate = await prisma.$transaction(async (tx) => {
+			const credential = await tx.candidateCredential.create({
+				data: { password_hash },
+			});
+
+			return tx.candidate.create({
+				data: {
+					f_name,
+					l_name,
+					candidate_name: `${f_name} ${l_name}`,
+					email,
+					phone: phone ?? null,
+					verified: verify_immediately,
+					invited: activate_immediately,
+					credential_id: credential.id,
+				},
+				select: {
+					id: true,
+					email: true,
+					f_name: true,
+					l_name: true,
+					candidate_name: true,
+					phone: true,
+					verified: true,
+					invited: true,
+					created_at: true,
+				},
+			});
 		});
 
-		return tx.candidate.create({
-			data: {
-				f_name,
-				l_name,
-				candidate_name: `${f_name} ${l_name}`,
-				email,
-				phone: phone ?? null,
-				verified: verify_immediately,
-				invited: activate_immediately,
-				credential_id: credential.id,
-			},
-			select: {
-				id: true,
-				email: true,
-				f_name: true,
-				l_name: true,
-				candidate_name: true,
-				phone: true,
-				verified: true,
-				invited: true,
-				created_at: true,
-			},
-		});
-	});
-
-	if (send_welcome_email) {
 		const fullName = `${f_name} ${l_name}`;
-		if (verify_immediately) {
-			await sendWelcomeEmail(email ?? "", fullName);
-			return Response.json({ data: candidate }, { status: 201 });
+		if (send_welcome_email) {
+			if (verify_immediately) {
+				await sendWelcomeEmail(email ?? "", fullName);
+			} else {
+				const verifyToken = crypto.randomUUID();
+				await prisma.candidateVerifyToken.create({
+					data: { token: verifyToken, expires_at: tokenExpiresAt(), candidate_id: candidate.id },
+				});
+				const verifyUrl = `${process.env.FRONTEND_URL_CANDIDATE}/auth/verify?token=${verifyToken}`;
+				await sendVerifyEmailAndWelcome(email ?? "", fullName, verifyUrl);
+			}
 		} else {
 			const verifyToken = crypto.randomUUID();
 			await prisma.candidateVerifyToken.create({
-				data: {
-					token: verifyToken,
-					expires_at: tokenExpiresAt(),
-					candidate_id: candidate.id,
-				},
+				data: { token: verifyToken, expires_at: tokenExpiresAt(), candidate_id: candidate.id },
 			});
 			const verifyUrl = `${process.env.FRONTEND_URL_CANDIDATE}/auth/verify?token=${verifyToken}`;
-			await sendVerifyEmailAndWelcome(email ?? "", fullName, verifyUrl);
-			return Response.json({ data: candidate }, { status: 201 });
+			await sendVerifyEmail(email ?? "", fullName, verifyUrl);
 		}
-	} else {
-		const fullName = `${f_name} ${l_name}`;
-		const verifyToken = crypto.randomUUID();
-		await prisma.candidateVerifyToken.create({
-			data: {
-				token: verifyToken,
-				expires_at: tokenExpiresAt(),
-				candidate_id: candidate.id,
-			},
-		});
-		const verifyUrl = `${process.env.FRONTEND_URL_CANDIDATE}/auth/verify?token=${verifyToken}`;
-		await sendVerifyEmail(email ?? "", fullName, verifyUrl);
+
+		finalizeLog(candidateLogId, "SUCCESS", candidate.id);
 		return Response.json({ data: candidate }, { status: 201 });
+	} catch (err) {
+		finalizeLog(candidateLogId, "FAILED", undefined, err instanceof Error ? err.message : "Unknown error");
+		return Response.json({ message: "Internal server error" }, { status: 500 });
 	}
 }

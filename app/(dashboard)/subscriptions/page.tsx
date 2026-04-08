@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
 	DollarSign,
@@ -13,6 +13,7 @@ import {
 	Trash2,
 	X,
 	ChevronDown,
+	Loader2,
 } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -21,18 +22,32 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { apiClient } from "@/lib/apiClient";
+import { successToast, errorToast } from "@/shared/helper/toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Plan = {
 	id: number;
 	name: string;
+	display_name: string;
 	price: number;
-	billingPeriod: string;
-	activeUsers: number;
+	billing_period: string;
+	active_users: number;
 	features: string[];
 	color: string;
-	public: boolean;
+	is_public: boolean;
+};
+
+type Summary = {
+	monthly_revenue: number;
+	revenue_growth_pct: number;
+	active_subscriptions: number;
+	total_companies: number;
+	renewals_this_month: number;
+	expiring_soon: number;
+	churn_rate: number;
+	churn_diff: number;
 };
 
 type Transaction = {
@@ -41,10 +56,10 @@ type Transaction = {
 	plan: string;
 	amount: string;
 	date: string;
-	status: "Completed" | "Pending" | "Failed";
+	status: "Completed" | "Pending" | "Failed" | "Refunded";
 };
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const PLAN_COLORS = [
 	{ label: "Slate", value: "#64748b" },
@@ -55,83 +70,14 @@ const PLAN_COLORS = [
 	{ label: "Red", value: "#ef4444" },
 ];
 
-const INITIAL_PLANS: Plan[] = [
-	{
-		id: 1,
-		name: "Basic",
-		price: 29,
-		billingPeriod: "month",
-		activeUsers: 145,
-		features: ["5 Job Posts", "50 Candidates", "Basic Analytics"],
-		color: "#64748b",
-		public: true,
-	},
-	{
-		id: 2,
-		name: "Pro",
-		price: 99,
-		billingPeriod: "month",
-		activeUsers: 463,
-		features: [
-			"20 Job Posts",
-			"200 Candidates",
-			"Advanced Analytics",
-			"Priority Support",
-		],
-		color: "#3b82f6",
-		public: true,
-	},
-	{
-		id: 3,
-		name: "Enterprise",
-		price: 299,
-		billingPeriod: "month",
-		activeUsers: 49,
-		features: [
-			"Unlimited Jobs",
-			"Unlimited Candidates",
-			"Custom Analytics",
-			"Dedicated Manager",
-		],
-		color: "#8b5cf6",
-		public: true,
-	},
-];
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const MOCK_TRANSACTIONS: Transaction[] = [
-	{
-		id: 1,
-		company: "Acme Corp",
-		plan: "Pro",
-		amount: "$99.00",
-		date: "Feb 20, 2025",
-		status: "Completed",
-	},
-	{
-		id: 2,
-		company: "Tech Solutions",
-		plan: "Enterprise",
-		amount: "$299.00",
-		date: "Feb 13, 2025",
-		status: "Completed",
-	},
-	{
-		id: 3,
-		company: "Global Industries",
-		plan: "Pro",
-		amount: "$99.00",
-		date: "Feb 13, 2025",
-		status: "Completed",
-	},
-	{
-		id: 4,
-		company: "Startup Inc.",
-		plan: "Basic",
-		amount: "$29.00",
-		date: "Feb 17, 2025",
-		status: "Pending",
-	},
-];
+const fmtRevenue = (n: number) =>
+	n >= 1_000_000
+		? `$${(n / 1_000_000).toFixed(1)}M`
+		: n >= 1_000
+			? `$${(n / 1_000).toFixed(1)}K`
+			: `$${n.toFixed(0)}`;
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 
@@ -142,16 +88,10 @@ type StatCardProps = {
 	value: string;
 	diff: string;
 	diffUp: boolean;
+	loading?: boolean;
 };
 
-const StatCard = ({
-	icon,
-	iconBg,
-	label,
-	value,
-	diff,
-	diffUp,
-}: StatCardProps) => (
+const StatCard = ({ icon, iconBg, label, value, diff, diffUp, loading }: StatCardProps) => (
 	<div className="flex flex-col gap-3 rounded-2xl bg-white border border-slate-100 p-5 shadow-xs dark:border-slate-800 dark:bg-slate-950">
 		<div className="flex items-center justify-between">
 			<div
@@ -170,63 +110,68 @@ const StatCard = ({
 			<p className="text-[12px] font-medium text-slate-400 dark:text-slate-500">
 				{label}
 			</p>
-			<p className="mt-0.5 text-[26px] font-bold text-slate-900 dark:text-slate-50">
-				{value}
-			</p>
-			<p
-				className={clsx(
-					"mt-1 text-[12px] font-medium",
-					diffUp ? "text-emerald-500" : "text-rose-400"
-				)}
-			>
-				{diff}
-			</p>
+			{loading ? (
+				<div className="mt-1.5 h-8 w-24 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800" />
+			) : (
+				<p className="mt-0.5 text-[26px] font-bold text-slate-900 dark:text-slate-50">
+					{value}
+				</p>
+			)}
+			{loading ? (
+				<div className="mt-2 h-3 w-32 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+			) : (
+				<p className={clsx("mt-1 text-[12px] font-medium", diffUp ? "text-emerald-500" : "text-rose-400")}>
+					{diff}
+				</p>
+			)}
 		</div>
 	</div>
 );
 
 // ─── Edit Plan Modal ──────────────────────────────────────────────────────────
 
-type EditModalProps = {
+const EditPlanModal = ({
+	plan,
+	onClose,
+	onSave,
+	saving,
+}: {
 	plan: Plan;
 	onClose: () => void;
-	onSave: (updated: Plan) => void;
-};
-
-const EditPlanModal = ({ plan, onClose, onSave }: EditModalProps) => {
-	const [name, setName] = useState(plan.name);
+	onSave: (updated: Partial<Plan> & { id: number }) => void;
+	saving: boolean;
+}) => {
+	const [displayName, setDisplayName] = useState(plan.display_name);
 	const [price, setPrice] = useState(String(plan.price));
-	const [billingPeriod, setBillingPeriod] = useState(plan.billingPeriod);
+	const [billingPeriod, setBillingPeriod] = useState(plan.billing_period);
 	const [features, setFeatures] = useState<string[]>([...plan.features]);
 	const [color, setColor] = useState(plan.color);
-	const [isPublic, setIsPublic] = useState(plan.public);
+	const [isPublic, setIsPublic] = useState(plan.is_public);
 
 	const addFeature = () => setFeatures((prev) => [...prev, ""]);
-	const removeFeature = (i: number) =>
-		setFeatures((prev) => prev.filter((_, idx) => idx !== i));
+	const removeFeature = (i: number) => setFeatures((prev) => prev.filter((_, idx) => idx !== i));
 	const updateFeature = (i: number, val: string) =>
 		setFeatures((prev) => prev.map((f, idx) => (idx === i ? val : f)));
 
 	const handleSave = () => {
 		onSave({
-			...plan,
-			name: name.trim() || plan.name,
+			id: plan.id,
+			display_name: displayName.trim() || plan.display_name,
 			price: parseFloat(price) || plan.price,
-			billingPeriod,
+			billing_period: billingPeriod,
 			features: features.filter((f) => f.trim()),
 			color,
-			public: isPublic,
+			is_public: isPublic,
 		});
 	};
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
 			<div className="relative w-full max-w-lg rounded-2xl bg-white shadow-xl dark:bg-slate-900 dark:border dark:border-slate-800 mx-4">
-				{/* Header */}
 				<div className="flex items-start justify-between p-6 pb-4">
 					<div>
 						<h2 className="text-[17px] font-bold text-slate-900 dark:text-slate-50">
-							Edit {plan.name} Plan
+							Edit {plan.display_name} Plan
 						</h2>
 						<p className="text-[12px] text-slate-400 mt-0.5">
 							Configure pricing and features
@@ -234,21 +179,22 @@ const EditPlanModal = ({ plan, onClose, onSave }: EditModalProps) => {
 					</div>
 					<button
 						onClick={onClose}
-						className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors dark:hover:bg-slate-800"
+						disabled={saving}
+						className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors dark:hover:bg-slate-800 disabled:opacity-50"
 					>
 						<X className="h-4 w-4" />
 					</button>
 				</div>
 
 				<div className="px-6 pb-6 space-y-4">
-					{/* Plan Name */}
+					{/* Display Name */}
 					<div>
 						<label className="text-[12px] font-semibold text-slate-600 dark:text-slate-400">
 							Plan Name <span className="text-red-500">*</span>
 						</label>
 						<input
-							value={name}
-							onChange={(e) => setName(e.target.value)}
+							value={displayName}
+							onChange={(e) => setDisplayName(e.target.value)}
 							className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
 						/>
 					</div>
@@ -279,9 +225,7 @@ const EditPlanModal = ({ plan, onClose, onSave }: EditModalProps) => {
 										type="button"
 										className="mt-1.5 flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-slate-800 hover:border-slate-300 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
 									>
-										<span>
-											{billingPeriod === "month" ? "Monthly" : "Yearly"}
-										</span>
+										<span>{billingPeriod === "month" ? "Monthly" : "Yearly"}</span>
 										<ChevronDown className="h-3.5 w-3.5 text-slate-400" />
 									</button>
 								</DropdownMenuTrigger>
@@ -309,7 +253,7 @@ const EditPlanModal = ({ plan, onClose, onSave }: EditModalProps) => {
 						</div>
 					</div>
 
-					{/* Plan Features */}
+					{/* Features */}
 					<div>
 						<label className="text-[12px] font-semibold text-slate-600 dark:text-slate-400">
 							Plan Features
@@ -340,7 +284,7 @@ const EditPlanModal = ({ plan, onClose, onSave }: EditModalProps) => {
 						</button>
 					</div>
 
-					{/* Plan Color */}
+					{/* Color */}
 					<div>
 						<label className="text-[12px] font-semibold text-slate-600 dark:text-slate-400">
 							Plan Color
@@ -375,18 +319,21 @@ const EditPlanModal = ({ plan, onClose, onSave }: EditModalProps) => {
 						</span>
 					</label>
 
-					{/* Footer actions */}
+					{/* Footer */}
 					<div className="flex items-center justify-end gap-2 pt-2">
 						<button
 							onClick={onClose}
-							className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+							disabled={saving}
+							className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
 						>
 							Cancel
 						</button>
 						<button
 							onClick={handleSave}
-							className="rounded-xl bg-[#005ca9] px-5 py-2 text-[13px] font-semibold text-white hover:bg-[#004e8f] transition-colors"
+							disabled={saving}
+							className="inline-flex items-center gap-2 rounded-xl bg-[#005ca9] px-5 py-2 text-[13px] font-semibold text-white hover:bg-[#004e8f] transition-colors disabled:opacity-50"
 						>
+							{saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
 							Save Changes
 						</button>
 					</div>
@@ -396,13 +343,14 @@ const EditPlanModal = ({ plan, onClose, onSave }: EditModalProps) => {
 	);
 };
 
-// ─── Status badge ─────────────────────────────────────────────────────────────
+// ─── Status Badge ─────────────────────────────────────────────────────────────
 
 const StatusBadge = ({ status }: { status: Transaction["status"] }) => {
-	const styles = {
+	const styles: Record<Transaction["status"], string> = {
 		Completed: "bg-emerald-500 text-white",
 		Pending: "bg-amber-400 text-white",
 		Failed: "bg-red-500 text-white",
+		Refunded: "bg-slate-400 text-white",
 	};
 	return (
 		<span
@@ -416,16 +364,94 @@ const StatusBadge = ({ status }: { status: Transaction["status"] }) => {
 	);
 };
 
+// ─── Skeleton rows ────────────────────────────────────────────────────────────
+
+const TxRowSkeleton = () => (
+	<tr className="border-b border-slate-50 dark:border-slate-800/50">
+		{[160, 80, 70, 100, 70].map((w, i) => (
+			<td key={i} className="py-3.5">
+				<div
+					className="h-4 animate-pulse rounded bg-slate-100 dark:bg-slate-800"
+					style={{ width: w }}
+				/>
+			</td>
+		))}
+	</tr>
+);
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const SubscriptionsPage = () => {
-	const [plans, setPlans] = useState<Plan[]>(INITIAL_PLANS);
+	const [plans, setPlans] = useState<Plan[]>([]);
+	const [summary, setSummary] = useState<Summary | null>(null);
+	const [transactions, setTransactions] = useState<Transaction[]>([]);
+	const [loadingPlans, setLoadingPlans] = useState(true);
+	const [loadingSummary, setLoadingSummary] = useState(true);
+	const [loadingTx, setLoadingTx] = useState(true);
 	const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
+	const [savingPlan, setSavingPlan] = useState(false);
 
-	const handleSave = (updated: Plan) => {
-		setPlans((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-		setEditingPlan(null);
+	// ── Load ──────────────────────────────────────────────────────────────────
+
+	const loadAll = useCallback(async () => {
+		setLoadingPlans(true);
+		setLoadingSummary(true);
+		setLoadingTx(true);
+
+		const [plansRes, summaryRes, txRes] = await Promise.allSettled([
+			apiClient.get("/api/subscriptions/plans"),
+			apiClient.get("/api/subscriptions/summary"),
+			apiClient.get("/api/subscriptions/transactions?limit=5"),
+		]);
+
+		if (plansRes.status === "fulfilled") {
+			setPlans(plansRes.value.data.data.plans);
+		} else {
+			errorToast("Failed to load plans");
+		}
+		setLoadingPlans(false);
+
+		if (summaryRes.status === "fulfilled") {
+			setSummary(summaryRes.value.data.data);
+		} else {
+			errorToast("Failed to load summary");
+		}
+		setLoadingSummary(false);
+
+		if (txRes.status === "fulfilled") {
+			setTransactions(txRes.value.data.data.transactions);
+		} else {
+			errorToast("Failed to load transactions");
+		}
+		setLoadingTx(false);
+	}, []);
+
+	useEffect(() => {
+		loadAll();
+	}, [loadAll]);
+
+	// ── Edit plan ─────────────────────────────────────────────────────────────
+
+	const handleSavePlan = async (updated: Partial<Plan> & { id: number }) => {
+		setSavingPlan(true);
+		try {
+			const { id, ...body } = updated;
+			const res = await apiClient.put(`/api/subscriptions/plans/${id}`, body);
+			const savedPlan: Plan = res.data.data.plan;
+			setPlans((prev) => prev.map((p) => (p.id === id ? savedPlan : p)));
+			setEditingPlan(null);
+			successToast("Plan updated successfully.");
+		} catch {
+			errorToast("Failed to save plan");
+		} finally {
+			setSavingPlan(false);
+		}
 	};
+
+	// ── Derived summary values ────────────────────────────────────────────────
+
+	const revenueGrowthUp = (summary?.revenue_growth_pct ?? 0) >= 0;
+	const churnUp = (summary?.churn_diff ?? 0) <= 0; // lower churn = good
 
 	return (
 		<section className="space-y-6 w-full">
@@ -445,33 +471,51 @@ const SubscriptionsPage = () => {
 					icon={<DollarSign className="h-5 w-5 text-emerald-600" />}
 					iconBg="#dcfce7"
 					label="Monthly Revenue"
-					value="$67,429"
-					diff="+12.5% from last month"
-					diffUp
+					value={fmtRevenue(summary?.monthly_revenue ?? 0)}
+					diff={
+						summary
+							? `${revenueGrowthUp ? "+" : ""}${summary.revenue_growth_pct}% from last month`
+							: "—"
+					}
+					diffUp={revenueGrowthUp}
+					loading={loadingSummary}
 				/>
 				<StatCard
 					icon={<CreditCard className="h-5 w-5 text-blue-600" />}
 					iconBg="#dbeafe"
 					label="Active Subscriptions"
-					value="657"
-					diff="846 companies subscribed"
+					value={String(summary?.active_subscriptions ?? 0)}
+					diff={
+						summary ? `${summary.total_companies} companies total` : "—"
+					}
 					diffUp
+					loading={loadingSummary}
 				/>
 				<StatCard
 					icon={<RefreshCw className="h-5 w-5 text-amber-500" />}
 					iconBg="#fef3c7"
 					label="Renewals This Month"
-					value="124"
-					diff="28 expiring soon"
+					value={String(summary?.renewals_this_month ?? 0)}
+					diff={
+						summary ? `${summary.expiring_soon} expiring soon` : "—"
+					}
 					diffUp
+					loading={loadingSummary}
 				/>
 				<StatCard
 					icon={<TrendingDown className="h-5 w-5 text-rose-500" />}
 					iconBg="#fee2e2"
 					label="Churn Rate"
-					value="3.2%"
-					diff="-0.8% improvement"
-					diffUp={false}
+					value={summary ? `${summary.churn_rate}%` : "—"}
+					diff={
+						summary
+							? summary.churn_diff <= 0
+								? `${Math.abs(summary.churn_diff)}% improvement`
+								: `+${summary.churn_diff}% increase`
+							: "—"
+					}
+					diffUp={churnUp}
+					loading={loadingSummary}
 				/>
 			</div>
 
@@ -480,60 +524,70 @@ const SubscriptionsPage = () => {
 				<h3 className="text-[16px] font-bold text-slate-800 dark:text-slate-100 mb-5">
 					Pricing Plans
 				</h3>
-				<div className="grid gap-4 md:grid-cols-3">
-					{plans.map((plan) => (
-						<div
-							key={plan.id}
-							className="flex flex-col rounded-2xl border border-slate-100 bg-slate-50/50 p-5 dark:border-slate-800 dark:bg-slate-900"
-						>
-							{/* Icon */}
+				{loadingPlans ? (
+					<div className="grid gap-4 md:grid-cols-3">
+						{[1, 2, 3].map((i) => (
 							<div
-								className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl"
-								style={{ backgroundColor: plan.color + "20" }}
+								key={i}
+								className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50/50 p-5 dark:border-slate-800 dark:bg-slate-900"
 							>
-								<CreditCard className="h-5 w-5" style={{ color: plan.color }} />
+								<div className="h-10 w-10 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-800" />
+								<div className="h-4 w-20 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+								<div className="h-8 w-28 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+								<div className="space-y-2 mt-2">
+									{[1, 2, 3].map((j) => (
+										<div key={j} className="h-3 w-full animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
+									))}
+								</div>
 							</div>
-
-							{/* Name & price */}
-							<p className="text-[13px] font-semibold text-slate-500 dark:text-slate-400">
-								{plan.name}
-							</p>
-							<p className="mt-0.5 text-[30px] font-bold text-slate-900 dark:text-slate-50 leading-none">
-								${plan.price}
-								<span className="text-[13px] font-normal text-slate-400">
-									/{plan.billingPeriod}
-								</span>
-							</p>
-							<p className="mt-1.5 text-[12px] text-slate-400">
-								{plan.activeUsers} active users
-							</p>
-
-							{/* Features */}
-							<ul className="mt-4 space-y-2 flex-1">
-								{plan.features.map((f) => (
-									<li key={f} className="flex items-center gap-2">
-										<Check
-											className="h-4 w-4 shrink-0"
-											style={{ color: plan.color }}
-										/>
-										<span className="text-[13px] text-slate-600 dark:text-slate-300">
-											{f}
-										</span>
-									</li>
-								))}
-							</ul>
-
-							{/* Edit button */}
-							<button
-								onClick={() => setEditingPlan(plan)}
-								className="mt-5 w-full rounded-xl py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90"
-								style={{ backgroundColor: plan.color }}
+						))}
+					</div>
+				) : (
+					<div className="grid gap-4 md:grid-cols-3">
+						{plans.map((plan) => (
+							<div
+								key={plan.id}
+								className="flex flex-col rounded-2xl border border-slate-100 bg-slate-50/50 p-5 dark:border-slate-800 dark:bg-slate-900"
 							>
-								Edit Plan
-							</button>
-						</div>
-					))}
-				</div>
+								<div
+									className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl"
+									style={{ backgroundColor: plan.color + "20" }}
+								>
+									<CreditCard className="h-5 w-5" style={{ color: plan.color }} />
+								</div>
+								<p className="text-[13px] font-semibold text-slate-500 dark:text-slate-400">
+									{plan.display_name}
+								</p>
+								<p className="mt-0.5 text-[30px] font-bold text-slate-900 dark:text-slate-50 leading-none">
+									${plan.price}
+									<span className="text-[13px] font-normal text-slate-400">
+										/{plan.billing_period}
+									</span>
+								</p>
+								<p className="mt-1.5 text-[12px] text-slate-400">
+									{plan.active_users} active users
+								</p>
+								<ul className="mt-4 space-y-2 flex-1">
+									{plan.features.map((f) => (
+										<li key={f} className="flex items-center gap-2">
+											<Check className="h-4 w-4 shrink-0" style={{ color: plan.color }} />
+											<span className="text-[13px] text-slate-600 dark:text-slate-300">
+												{f}
+											</span>
+										</li>
+									))}
+								</ul>
+								<button
+									onClick={() => setEditingPlan(plan)}
+									className="mt-5 w-full rounded-xl py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90"
+									style={{ backgroundColor: plan.color }}
+								>
+									Edit Plan
+								</button>
+							</div>
+						))}
+					</div>
+				)}
 			</div>
 
 			{/* Recent Transactions */}
@@ -564,36 +618,47 @@ const SubscriptionsPage = () => {
 						</tr>
 					</thead>
 					<tbody>
-						{MOCK_TRANSACTIONS.map((tx) => (
-							<tr
-								key={tx.id}
-								className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-slate-800/50 dark:hover:bg-slate-900/40"
-							>
-								<td className="py-3.5 text-[13px] font-semibold text-slate-800 dark:text-slate-200">
-									{tx.company}
-								</td>
-								<td className="py-3.5 text-[13px] text-slate-500 dark:text-slate-400">
-									{tx.plan}
-								</td>
-								<td className="py-3.5 text-[13px] font-semibold text-slate-700 dark:text-slate-300">
-									{tx.amount}
-								</td>
-								<td className="py-3.5 text-[13px] text-slate-400">{tx.date}</td>
-								<td className="py-3.5">
-									<StatusBadge status={tx.status} />
+						{loadingTx ? (
+							[...Array(4)].map((_, i) => <TxRowSkeleton key={i} />)
+						) : transactions.length === 0 ? (
+							<tr>
+								<td colSpan={5} className="py-10 text-center text-[14px] text-slate-400">
+									No transactions yet.
 								</td>
 							</tr>
-						))}
+						) : (
+							transactions.map((tx) => (
+								<tr
+									key={tx.id}
+									className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 dark:border-slate-800/50 dark:hover:bg-slate-900/40"
+								>
+									<td className="py-3.5 text-[13px] font-semibold text-slate-800 dark:text-slate-200">
+										{tx.company}
+									</td>
+									<td className="py-3.5 text-[13px] text-slate-500 dark:text-slate-400">
+										{tx.plan}
+									</td>
+									<td className="py-3.5 text-[13px] font-semibold text-slate-700 dark:text-slate-300">
+										{tx.amount}
+									</td>
+									<td className="py-3.5 text-[13px] text-slate-400">{tx.date}</td>
+									<td className="py-3.5">
+										<StatusBadge status={tx.status} />
+									</td>
+								</tr>
+							))
+						)}
 					</tbody>
 				</table>
 			</div>
 
-			{/* Edit Modal */}
+			{/* Edit Plan Modal */}
 			{editingPlan && (
 				<EditPlanModal
 					plan={editingPlan}
 					onClose={() => setEditingPlan(null)}
-					onSave={handleSave}
+					onSave={handleSavePlan}
+					saving={savingPlan}
 				/>
 			)}
 		</section>
