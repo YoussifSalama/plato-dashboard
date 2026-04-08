@@ -78,16 +78,22 @@ const toDatetimeLocalInput = (value?: string | Date | null) => {
 	return local.toISOString().slice(0, 16);
 };
 
-const normalizeLanguageValue = (value: string): "ar" | "en" | null => {
+const normalizeLanguageValue = (value: string): string | null => {
 	const normalized = value.trim().toLowerCase();
 	if (!normalized) return null;
 	if (normalized === "ar" || normalized === "arabic") return "ar";
 	if (normalized === "en" || normalized === "english") return "en";
+	if (normalized === "es" || normalized === "spanish" || normalized === "español") return "es";
+	if (normalized === "fr" || normalized === "french" || normalized === "français") return "fr";
+	if (normalized === "de" || normalized === "german" || normalized === "deutsch") return "de";
+	if (normalized === "zh" || normalized === "chinese" || normalized === "中文") return "zh";
+	if (normalized === "hi" || normalized === "hindi" || normalized === "हिन्दी") return "hi";
+	if (normalized === "it" || normalized === "italian" || normalized === "italiano") return "it";
 	return null;
 };
 
-const normalizeLanguages = (values: string[]): ("ar" | "en")[] => {
-	const output: ("ar" | "en")[] = [];
+const normalizeLanguages = (values: string[]): string[] => {
+	const output: string[] = [];
 	values.forEach((value) => {
 		const mapped = normalizeLanguageValue(value);
 		if (mapped && !output.includes(mapped)) {
@@ -1223,7 +1229,7 @@ const JobWatchForm = () => {
 												})
 											}
 											options={jobLanguageOptions}
-											placeholder="Select Arabic or English"
+											placeholder="Select interview language(s)"
 											allowCustom={false}
 										/>
 									</div>

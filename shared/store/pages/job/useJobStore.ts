@@ -84,7 +84,7 @@ export type CreateJobPayload = {
 	auto_denied_threshold?: number;
 	soft_skills?: string[];
 	technical_skills?: string[];
-	languages?: ("ar" | "en")[];
+	languages?: string[];
 };
 
 export type GenerateJobAiPayload = {
@@ -136,7 +136,7 @@ export type JobDetail = JobListItem & {
 	job_benefits?: string | null;
 	soft_skills: string[];
 	technical_skills: string[];
-	languages: ("ar" | "en")[];
+	languages: string[];
 	jobAiPrompt?: JobAiPrompt | null;
 };
 
