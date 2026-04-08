@@ -961,13 +961,11 @@ const LogsPage = () => {
 									cx="50%"
 									cy="50%"
 									innerRadius={0}
-									outerRadius={75}
+									outerRadius={85}
 									paddingAngle={2}
 									dataKey="value"
-									label={({ percent, index }) =>
-										`(${index + 1}) ${Math.round((percent ?? 0) * 100)}%`
-									}
-									labelLine={{ stroke: "#cbd5e1", strokeWidth: 1 }}
+									label={false}
+									labelLine={false}
 								/>
 								<Tooltip
 									formatter={(value) => [`${value}%`, ""]}
