@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { verifyAdminRequest } from "@/lib/admin-guard";
+import { startAdminLog, finalizeLog } from "@/lib/system-logger";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -118,17 +119,23 @@ export async function PUT(
 
 	const { expires_at, ...rest } = parsed.data;
 
-	const updated = await prisma.voucher.update({
-		where: { id },
-		data: {
-			...rest,
-			...(expires_at !== undefined
-				? { expires_at: expires_at ? new Date(expires_at) : null }
-				: {}),
-		},
-	});
-
-	return NextResponse.json({ data: { voucher: formatVoucher(updated) } });
+	const logId = await startAdminLog(request, payload.email, { action: "UPDATE", tableName: "vouchers" });
+	try {
+		const updated = await prisma.voucher.update({
+			where: { id },
+			data: {
+				...rest,
+				...(expires_at !== undefined
+					? { expires_at: expires_at ? new Date(expires_at) : null }
+					: {}),
+			},
+		});
+		finalizeLog(logId, "SUCCESS", id);
+		return NextResponse.json({ data: { voucher: formatVoucher(updated) } });
+	} catch (err) {
+		finalizeLog(logId, "FAILED", id, err instanceof Error ? err.message : "Unknown error");
+		return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+	}
 }
 
 // ─── PATCH — activate / deactivate voucher ────────────────────────────────────
@@ -153,10 +160,16 @@ export async function PATCH(
 		return NextResponse.json({ message: "Voucher not found" }, { status: 404 });
 	}
 
-	const updated = await prisma.voucher.update({
-		where: { id },
-		data: { is_active: !existing.is_active },
-	});
-
-	return NextResponse.json({ data: { voucher: formatVoucher(updated) } });
+	const logId = await startAdminLog(request, payload.email, { action: "UPDATE", tableName: "vouchers", meta: { toggled_active: !existing.is_active } });
+	try {
+		const updated = await prisma.voucher.update({
+			where: { id },
+			data: { is_active: !existing.is_active },
+		});
+		finalizeLog(logId, "SUCCESS", id);
+		return NextResponse.json({ data: { voucher: formatVoucher(updated) } });
+	} catch (err) {
+		finalizeLog(logId, "FAILED", id, err instanceof Error ? err.message : "Unknown error");
+		return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+	}
 }

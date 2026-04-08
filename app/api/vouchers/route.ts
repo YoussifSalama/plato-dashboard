@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { verifyAdminRequest } from "@/lib/admin-guard";
+import { startAdminLog, finalizeLog } from "@/lib/system-logger";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -209,20 +210,26 @@ export async function POST(request: NextRequest) {
 		);
 	}
 
-	const voucher = await prisma.voucher.create({
-		data: {
-			code,
-			discount,
-			type,
-			usage_limit: usage_limit ?? null,
-			expires_at: expires_at ? new Date(expires_at) : null,
-			is_active: is_active ?? true,
-			plans: plans ?? [],
-			features: features ?? [],
-			color: color ?? "#3b82f6",
-			revenue_impact: revenue_impact ?? 0,
-		},
-	});
-
-	return NextResponse.json({ data: { voucher: formatVoucher(voucher) } }, { status: 201 });
+	const logId = await startAdminLog(request, payload.email, { action: "CREATE", tableName: "vouchers" });
+	try {
+		const voucher = await prisma.voucher.create({
+			data: {
+				code,
+				discount,
+				type,
+				usage_limit: usage_limit ?? null,
+				expires_at: expires_at ? new Date(expires_at) : null,
+				is_active: is_active ?? true,
+				plans: plans ?? [],
+				features: features ?? [],
+				color: color ?? "#3b82f6",
+				revenue_impact: revenue_impact ?? 0,
+			},
+		});
+		finalizeLog(logId, "SUCCESS", voucher.id);
+		return NextResponse.json({ data: { voucher: formatVoucher(voucher) } }, { status: 201 });
+	} catch (err) {
+		finalizeLog(logId, "FAILED", undefined, err instanceof Error ? err.message : "Unknown error");
+		return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+	}
 }

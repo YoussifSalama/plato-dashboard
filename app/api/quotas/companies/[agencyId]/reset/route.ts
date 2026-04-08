@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyAdminRequest } from "@/lib/admin-guard";
+import { startAdminLog, finalizeLog } from "@/lib/system-logger";
 
 export async function POST(
 	request: NextRequest,
@@ -24,15 +25,21 @@ export async function POST(
 		return NextResponse.json({ message: "Subscription not found" }, { status: 404 });
 	}
 
-	await prisma.agencySubscription.update({
-		where: { agency_id: agencyId },
-		data: {
-			used_job_posting: 0,
-			used_resume_analysis: 0,
-			used_phone_calls: 0,
-			used_recordings: 0,
-		},
-	});
-
-	return NextResponse.json({ data: { message: "Usage reset successfully" } });
+	const logId = await startAdminLog(request, payload.email, { action: "UPDATE", tableName: "quotas", meta: { reset: true } });
+	try {
+		await prisma.agencySubscription.update({
+			where: { agency_id: agencyId },
+			data: {
+				used_job_posting: 0,
+				used_resume_analysis: 0,
+				used_phone_calls: 0,
+				used_recordings: 0,
+			},
+		});
+		finalizeLog(logId, "SUCCESS", agencyId);
+		return NextResponse.json({ data: { message: "Usage reset successfully" } });
+	} catch (err) {
+		finalizeLog(logId, "FAILED", agencyId, err instanceof Error ? err.message : "Unknown error");
+		return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+	}
 }

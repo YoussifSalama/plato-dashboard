@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { verifyAdminRequest } from "@/lib/admin-guard";
+import { startAdminLog, finalizeLog } from "@/lib/system-logger";
 
 type Params = Promise<{ type: string; id: string }>;
 
@@ -70,20 +71,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
       }
     }
 
-    const updated = await prisma.account.update({
-      where: { id: numericId },
-      data: parsed.data,
-      select: {
-        id: true,
-        email: true,
-        f_name: true,
-        l_name: true,
-        verified: true,
-        updated_at: true,
-      },
-    });
-
-    return Response.json({ data: updated });
+    const logId = await startAdminLog(request, admin.email, { action: "UPDATE", tableName: "users", meta: { user_type: "company" } });
+    try {
+      const updated = await prisma.account.update({
+        where: { id: numericId },
+        data: parsed.data,
+        select: {
+          id: true,
+          email: true,
+          f_name: true,
+          l_name: true,
+          verified: true,
+          updated_at: true,
+        },
+      });
+      finalizeLog(logId, "SUCCESS", numericId);
+      return Response.json({ data: updated });
+    } catch (err) {
+      finalizeLog(logId, "FAILED", numericId, err instanceof Error ? err.message : "Unknown error");
+      return Response.json({ message: "Internal server error" }, { status: 500 });
+    }
   }
 
   // type === "candidate"
@@ -109,20 +116,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
     }
   }
 
-  const updated = await prisma.candidate.update({
-    where: { id: numericId },
-    data: parsed.data,
-    select: {
-      id: true,
-      email: true,
-      f_name: true,
-      l_name: true,
-      verified: true,
-      updated_at: true,
-    },
-  });
-
-  return Response.json({ data: updated });
+  const logId = await startAdminLog(request, admin.email, { action: "UPDATE", tableName: "users", meta: { user_type: "candidate" } });
+  try {
+    const updated = await prisma.candidate.update({
+      where: { id: numericId },
+      data: parsed.data,
+      select: {
+        id: true,
+        email: true,
+        f_name: true,
+        l_name: true,
+        verified: true,
+        updated_at: true,
+      },
+    });
+    finalizeLog(logId, "SUCCESS", numericId);
+    return Response.json({ data: updated });
+  } catch (err) {
+    finalizeLog(logId, "FAILED", numericId, err instanceof Error ? err.message : "Unknown error");
+    return Response.json({ message: "Internal server error" }, { status: 500 });
+  }
 }
 
 // DELETE /api/user/[type]/[id]
@@ -144,8 +157,15 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
     if (!account) {
       return Response.json({ message: "Company not found" }, { status: 404 });
     }
-    await prisma.account.delete({ where: { id: numericId } });
-    return Response.json({ message: "Company deleted" });
+    const logId = await startAdminLog(request, admin.email, { action: "DELETE", tableName: "users", meta: { user_type: "company" } });
+    try {
+      await prisma.account.delete({ where: { id: numericId } });
+      finalizeLog(logId, "SUCCESS", numericId);
+      return Response.json({ message: "Company deleted" });
+    } catch (err) {
+      finalizeLog(logId, "FAILED", numericId, err instanceof Error ? err.message : "Unknown error");
+      return Response.json({ message: "Internal server error" }, { status: 500 });
+    }
   }
 
   // type === "candidate"
@@ -153,6 +173,13 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
   if (!candidate) {
     return Response.json({ message: "Candidate not found" }, { status: 404 });
   }
-  await prisma.candidate.delete({ where: { id: numericId } });
-  return Response.json({ message: "Candidate deleted" });
+  const logId2 = await startAdminLog(request, admin.email, { action: "DELETE", tableName: "users", meta: { user_type: "candidate" } });
+  try {
+    await prisma.candidate.delete({ where: { id: numericId } });
+    finalizeLog(logId2, "SUCCESS", numericId);
+    return Response.json({ message: "Candidate deleted" });
+  } catch (err) {
+    finalizeLog(logId2, "FAILED", numericId, err instanceof Error ? err.message : "Unknown error");
+    return Response.json({ message: "Internal server error" }, { status: 500 });
+  }
 }

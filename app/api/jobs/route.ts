@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { verifyAdminRequest } from "@/lib/admin-guard";
+import { startAdminLog, finalizeLog } from "@/lib/system-logger";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -178,34 +179,40 @@ export async function POST(request: NextRequest) {
 		return NextResponse.json({ message: "Company not found" }, { status: 404 });
 	}
 
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const job = await prisma.job.create({
-		data: {
-			...rest,
-			agency_id,
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			workplace_type: rest.workplace_type as any,
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			employment_type: rest.employment_type as any,
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			seniority_level: rest.seniority_level as any,
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			industry: rest.industry as any,
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			salary_currency: salary_currency as any,
-			salary_from,
-			salary_to,
-			auto_deactivate_at: new Date(auto_deactivate_at),
-			certifications: certifications ?? "",
-			soft_skills: soft_skills ?? [],
-			technical_skills: technical_skills ?? [],
-			languages: ((languages as unknown) ?? []) as object[],
-		},
-		include: {
-			agency: { select: { company_name: true } },
-			_count: { select: { resumes: true } },
-		},
-	});
-
-	return NextResponse.json({ data: formatJob(job) }, { status: 201 });
+	const logId = await startAdminLog(request, payload.email, { action: "CREATE", tableName: "jobs" });
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const job = await prisma.job.create({
+			data: {
+				...rest,
+				agency_id,
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				workplace_type: rest.workplace_type as any,
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				employment_type: rest.employment_type as any,
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				seniority_level: rest.seniority_level as any,
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				industry: rest.industry as any,
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				salary_currency: salary_currency as any,
+				salary_from,
+				salary_to,
+				auto_deactivate_at: new Date(auto_deactivate_at),
+				certifications: certifications ?? "",
+				soft_skills: soft_skills ?? [],
+				technical_skills: technical_skills ?? [],
+				languages: ((languages as unknown) ?? []) as object[],
+			},
+			include: {
+				agency: { select: { company_name: true } },
+				_count: { select: { resumes: true } },
+			},
+		});
+		finalizeLog(logId, "SUCCESS", job.id);
+		return NextResponse.json({ data: formatJob(job) }, { status: 201 });
+	} catch (err) {
+		finalizeLog(logId, "FAILED", undefined, err instanceof Error ? err.message : "Unknown error");
+		return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+	}
 }

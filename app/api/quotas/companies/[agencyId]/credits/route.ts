@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { verifyAdminRequest } from "@/lib/admin-guard";
+import { startAdminLog, finalizeLog } from "@/lib/system-logger";
 
 const CreditsSchema = z.object({
 	credit_type: z.enum(["jobPosts", "candidates", "messages", "downloads"]),
@@ -86,22 +87,28 @@ export async function POST(
 	const currentLimit = currentOverride ?? planQuota;
 	const newLimit = currentLimit + amount;
 
-	const updated = await prisma.agencySubscription.update({
-		where: { agency_id: agencyId },
-		data: { [overrideField]: newLimit },
-		select: {
-			quota_job_posts_override: true,
-			quota_resume_analysis_override: true,
-			quota_phone_calls_override: true,
-			quota_recordings_override: true,
-		},
-	});
-
-	return NextResponse.json({
-		data: {
-			credit_type,
-			new_limit: newLimit,
-			overrides: updated,
-		},
-	});
+	const logId = await startAdminLog(request, payload.email, { action: "CREATE", tableName: "quotas", meta: { credit_type, amount, new_limit: newLimit } });
+	try {
+		const updated = await prisma.agencySubscription.update({
+			where: { agency_id: agencyId },
+			data: { [overrideField]: newLimit },
+			select: {
+				quota_job_posts_override: true,
+				quota_resume_analysis_override: true,
+				quota_phone_calls_override: true,
+				quota_recordings_override: true,
+			},
+		});
+		finalizeLog(logId, "SUCCESS", agencyId);
+		return NextResponse.json({
+			data: {
+				credit_type,
+				new_limit: newLimit,
+				overrides: updated,
+			},
+		});
+	} catch (err) {
+		finalizeLog(logId, "FAILED", agencyId, err instanceof Error ? err.message : "Unknown error");
+		return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+	}
 }

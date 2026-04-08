@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { verifyAdminRequest } from "@/lib/admin-guard";
+import { startAdminLog, finalizeLog } from "@/lib/system-logger";
 
 const UpdatePlanSchema = z.object({
 	display_name: z.string().min(1).max(100).optional(),
@@ -47,31 +48,37 @@ export async function PUT(
 		return NextResponse.json({ message: "Plan not found" }, { status: 404 });
 	}
 
-	const updated = await prisma.subscriptionPlan.update({
-		where: { id },
-		data: parsed.data,
-		include: {
-			_count: {
-				select: {
-					agency_subscriptions: { where: { is_active: true } },
+	const logId = await startAdminLog(request, payload.email, { action: "UPDATE", tableName: "subscription_plans" });
+	try {
+		const updated = await prisma.subscriptionPlan.update({
+			where: { id },
+			data: parsed.data,
+			include: {
+				_count: {
+					select: {
+						agency_subscriptions: { where: { is_active: true } },
+					},
 				},
 			},
-		},
-	});
-
-	return NextResponse.json({
-		data: {
-			plan: {
-				id: updated.id,
-				name: updated.name,
-				display_name: updated.display_name ?? updated.name,
-				price: updated.price,
-				billing_period: updated.billing_period,
-				features: updated.features,
-				color: updated.color,
-				is_public: updated.is_public,
-				active_users: updated._count.agency_subscriptions,
+		});
+		finalizeLog(logId, "SUCCESS", id);
+		return NextResponse.json({
+			data: {
+				plan: {
+					id: updated.id,
+					name: updated.name,
+					display_name: updated.display_name ?? updated.name,
+					price: updated.price,
+					billing_period: updated.billing_period,
+					features: updated.features,
+					color: updated.color,
+					is_public: updated.is_public,
+					active_users: updated._count.agency_subscriptions,
+				},
 			},
-		},
-	});
+		});
+	} catch (err) {
+		finalizeLog(logId, "FAILED", id, err instanceof Error ? err.message : "Unknown error");
+		return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+	}
 }

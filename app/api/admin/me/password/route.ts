@@ -3,6 +3,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { verifyAdminRequest } from "@/lib/admin-guard";
+import { startAdminLog, finalizeLog } from "@/lib/system-logger";
 
 const ChangePasswordSchema = z.object({
 	current_password: z.string().min(1, "Current password is required"),
@@ -57,10 +58,16 @@ export async function PUT(request: NextRequest) {
 
 	// Hash new password and update
 	const password_hash = await bcrypt.hash(new_password, 12);
-	await prisma.adminCredential.update({
-		where: { id: admin.credential.id },
-		data: { password_hash },
-	});
-
-	return NextResponse.json({ data: { message: "Password updated successfully" } });
+	const logId = await startAdminLog(request, payload.email, { action: "UPDATE", tableName: "admins", meta: { field: "password" } });
+	try {
+		await prisma.adminCredential.update({
+			where: { id: admin.credential.id },
+			data: { password_hash },
+		});
+		finalizeLog(logId, "SUCCESS", payload.adminId);
+		return NextResponse.json({ data: { message: "Password updated successfully" } });
+	} catch (err) {
+		finalizeLog(logId, "FAILED", payload.adminId, err instanceof Error ? err.message : "Unknown error");
+		return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+	}
 }

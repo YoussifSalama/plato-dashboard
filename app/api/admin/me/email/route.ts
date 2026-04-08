@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { verifyAdminRequest } from "@/lib/admin-guard";
+import { startAdminLog, finalizeLog } from "@/lib/system-logger";
 
 const UpdateEmailSchema = z.object({
 	email: z.string().email("Invalid email address"),
@@ -39,11 +40,17 @@ export async function PUT(request: NextRequest) {
 		);
 	}
 
-	const admin = await prisma.admin.update({
-		where: { id: payload.adminId },
-		data: { email },
-		select: { id: true, email: true },
-	});
-
-	return NextResponse.json({ data: { admin } });
+	const logId = await startAdminLog(request, payload.email, { action: "UPDATE", tableName: "admins" });
+	try {
+		const admin = await prisma.admin.update({
+			where: { id: payload.adminId },
+			data: { email },
+			select: { id: true, email: true },
+		});
+		finalizeLog(logId, "SUCCESS", admin.id);
+		return NextResponse.json({ data: { admin } });
+	} catch (err) {
+		finalizeLog(logId, "FAILED", payload.adminId, err instanceof Error ? err.message : "Unknown error");
+		return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+	}
 }

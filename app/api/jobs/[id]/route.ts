@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { verifyAdminRequest } from "@/lib/admin-guard";
+import { startAdminLog, finalizeLog } from "@/lib/system-logger";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -169,45 +170,51 @@ export async function PUT(
 
 	const { auto_deactivate_at, languages, ...rest } = parsed.data;
 
-	const job = await prisma.job.update({
-		where: { id },
-		data: {
-			...rest,
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			...(rest.workplace_type
-				? { workplace_type: rest.workplace_type as any }
-				: {}),
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			...(rest.employment_type
-				? { employment_type: rest.employment_type as any }
-				: {}),
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			...(rest.seniority_level
-				? { seniority_level: rest.seniority_level as any }
-				: {}),
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			...(rest.industry ? { industry: rest.industry as any } : {}),
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			...(rest.salary_currency
-				? { salary_currency: rest.salary_currency as any }
-				: {}),
-			...(auto_deactivate_at
-				? { auto_deactivate_at: new Date(auto_deactivate_at) }
-				: {}),
-			...(languages !== undefined
-				? { languages: languages as unknown as object[] }
-				: {}),
-		},
-		include: {
-			agency: {
-				select: { company_name: true, account: { select: { id: true } } },
+	const logId = await startAdminLog(request, payload.email, { action: "UPDATE", tableName: "jobs" });
+	try {
+		const job = await prisma.job.update({
+			where: { id },
+			data: {
+				...rest,
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				...(rest.workplace_type
+					? { workplace_type: rest.workplace_type as any }
+					: {}),
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				...(rest.employment_type
+					? { employment_type: rest.employment_type as any }
+					: {}),
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				...(rest.seniority_level
+					? { seniority_level: rest.seniority_level as any }
+					: {}),
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				...(rest.industry ? { industry: rest.industry as any } : {}),
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				...(rest.salary_currency
+					? { salary_currency: rest.salary_currency as any }
+					: {}),
+				...(auto_deactivate_at
+					? { auto_deactivate_at: new Date(auto_deactivate_at) }
+					: {}),
+				...(languages !== undefined
+					? { languages: languages as unknown as object[] }
+					: {}),
 			},
-			_count: { select: { resumes: true } },
-			jobAiPrompt: true,
-		},
-	});
-
-	return NextResponse.json({ data: formatJobDetail(job) });
+			include: {
+				agency: {
+					select: { company_name: true, account: { select: { id: true } } },
+				},
+				_count: { select: { resumes: true } },
+				jobAiPrompt: true,
+			},
+		});
+		finalizeLog(logId, "SUCCESS", id);
+		return NextResponse.json({ data: formatJobDetail(job) });
+	} catch (err) {
+		finalizeLog(logId, "FAILED", id, err instanceof Error ? err.message : "Unknown error");
+		return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+	}
 }
 
 // ─── DELETE /api/jobs/[id] ─────────────────────────────────────────────────────
@@ -232,7 +239,13 @@ export async function DELETE(
 		return NextResponse.json({ message: "Job not found" }, { status: 404 });
 	}
 
-	await prisma.job.delete({ where: { id } });
-
-	return NextResponse.json({ message: "Job deleted successfully" });
+	const logId = await startAdminLog(request, payload.email, { action: "DELETE", tableName: "jobs" });
+	try {
+		await prisma.job.delete({ where: { id } });
+		finalizeLog(logId, "SUCCESS", id);
+		return NextResponse.json({ message: "Job deleted successfully" });
+	} catch (err) {
+		finalizeLog(logId, "FAILED", id, err instanceof Error ? err.message : "Unknown error");
+		return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+	}
 }
