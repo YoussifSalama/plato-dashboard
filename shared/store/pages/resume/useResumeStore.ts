@@ -177,9 +177,10 @@ export const useResumeStore = create<IresumeStore>((set) => ({
             const token = getToken();
             if (!token) return 401;
             const chunkSize = 5;
-            const concurrency = 6;
+            const concurrency = 3;
             const maxRetries = 3;
             const baseDelayMs = 500;
+            const maxBatchBytes = 18 * 1024 * 1024;
             set({
                 uploadStatus: "uploading",
                 uploadTotal: files.length,
@@ -188,7 +189,23 @@ export const useResumeStore = create<IresumeStore>((set) => ({
                 lastUploadError: null,
             });
             const chunks: File[][] = [];
-            for (let i = 0; i < files.length; i += chunkSize) chunks.push(files.slice(i, i + chunkSize));
+            let currentChunk: File[] = [];
+            let currentChunkBytes = 0;
+            for (const file of files) {
+                const fileSize = Number(file?.size ?? 0);
+                const wouldExceedCount = currentChunk.length >= chunkSize;
+                const wouldExceedBytes = currentChunk.length > 0 && currentChunkBytes + fileSize > maxBatchBytes;
+                if (wouldExceedCount || wouldExceedBytes) {
+                    chunks.push(currentChunk);
+                    currentChunk = [];
+                    currentChunkBytes = 0;
+                }
+                currentChunk.push(file);
+                currentChunkBytes += fileSize;
+            }
+            if (currentChunk.length > 0) {
+                chunks.push(currentChunk);
+            }
             const uploadChunk = async (chunk: File[]) => {
                 const formData = new FormData();
                 chunk.forEach((file) => formData.append("resumes", file));
@@ -228,7 +245,10 @@ export const useResumeStore = create<IresumeStore>((set) => ({
                             await uploadWithRetry(current);
                             set((state) => ({ uploadUploaded: state.uploadUploaded + current.length }));
                         } catch (error) {
-                            lastErrorMessage = (error as Error)?.message ?? "Upload failed. Please retry.";
+                            const status = (error as { response?: { status?: number } })?.response?.status;
+                            lastErrorMessage = status === 413
+                                ? "Upload payload is too large for the server gateway. Please upload smaller files or upload one by one."
+                                : (error as Error)?.message ?? "Upload failed. Please retry.";
                             failedCount += current.length;
                             set((state) => ({ uploadFailed: state.uploadFailed + current.length, lastUploadError: lastErrorMessage }));
                         }
