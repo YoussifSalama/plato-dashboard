@@ -8,11 +8,16 @@ import { BackendApiClient, getAgencyToken } from "../resume/useResumeStore";
 
 // ── Types matching GET /agency/dashboard response ──────────────────────────
 
+export type DashboardMetricStat = {
+	value: number;
+	trend: number;
+};
+
 export type DashboardMetrics = {
-	activeJobs: number;
-	totalCandidates: number;
-	upcomingInterviews: number;
-	unreadMessages: number;
+	activeJobs: DashboardMetricStat;
+	totalCandidates: DashboardMetricStat;
+	upcomingInterviews: DashboardMetricStat;
+	unreadMessages: DashboardMetricStat;
 };
 
 export type DashboardOverviewStat = {
@@ -21,7 +26,7 @@ export type DashboardOverviewStat = {
 };
 
 export type DashboardOverview = {
-	totalJobs: DashboardOverviewStat;
+	enquiries: DashboardOverviewStat;
 	newApplicants: DashboardOverviewStat;
 	interviewsScheduled: DashboardOverviewStat;
 	hiringSuccessRate: DashboardOverviewStat;
@@ -83,6 +88,7 @@ interface DashboardStore {
 	getDashboard: (
 		accountId?: string | number
 	) => Promise<AgencyDashboardData | null>;
+	getAdminDashboard: () => Promise<AgencyDashboardData | null>;
 	clear: () => void;
 }
 
@@ -100,6 +106,20 @@ const useDashboardStore = create<DashboardStore>((set) => ({
 			});
 			const dashboard = (response.data?.data ??
 				response.data) as AgencyDashboardData;
+			set({ dashboard });
+			return dashboard;
+		} catch {
+			set({ dashboard: null });
+			return null;
+		} finally {
+			set({ loading: false });
+		}
+	},
+	getAdminDashboard: async () => {
+		set({ loading: true });
+		try {
+			const response = await apiClient.get("/api/dashboard");
+			const dashboard = response.data?.data as AgencyDashboardData;
 			set({ dashboard });
 			return dashboard;
 		} catch {

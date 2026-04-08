@@ -25,17 +25,13 @@ import {
 	ArrowUpRight,
 	Clock,
 	CheckCircle2,
-	XCircle,
 	FileText,
 	Plus,
 } from "lucide-react";
 import useDashboardStore from "@/shared/store/pages/dashboard/useDashboardStore";
 import { DashboardActivity } from "@/shared/store/pages/dashboard/useDashboardStore";
-import { useInterviewStatisticsStore } from "@/shared/store/pages/interview/useInterviewStatisticsStore";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import clsx from "clsx";
-import { motion } from "framer-motion";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -50,96 +46,25 @@ function timeAgo(timestamp: string): string {
 	return `${days} day${days !== 1 ? "s" : ""} ago`;
 }
 
-function formatTrend(trend: number): string {
-	if (trend === 0) return "0%";
-	return `+${trend.toFixed(trend % 1 === 0 ? 0 : 1)}%`;
-}
-
 function formatPercent(value: number): string {
 	return `${(value * 100).toFixed(1)}%`;
 }
 
-// ─── Progress Bar helpers ───────────────────────────────────────────────────
+function formatTrend(trend: number): string {
+	const abs = Math.abs(trend);
+	return `${abs % 1 === 0 ? abs.toFixed(0) : abs.toFixed(1)}%`;
+}
 
-const ProgressBar = ({
-	current,
-	max,
-	label,
-	extraQuota = 0,
-}: {
-	current: number;
-	max: number | null;
-	label: string;
-	extraQuota?: number;
-}) => {
-	const effectiveMax = max !== null ? max + extraQuota : null;
-	const isUnlimited = effectiveMax === null;
-	const percentage = isUnlimited
-		? 0
-		: Math.min(100, Math.max(0, (current / effectiveMax!) * 100));
-
-	let colorClass = "bg-blue-600 dark:bg-blue-500";
-	if (!isUnlimited) {
-		if (percentage >= 100) colorClass = "bg-red-600 dark:bg-red-500";
-		else if (percentage >= 80) colorClass = "bg-amber-500 dark:bg-amber-400";
-	}
-
-	return (
-		<div className="space-y-2">
-			<div className="flex justify-between text-sm font-medium">
-				<span className="text-slate-700 dark:text-slate-300">{label}</span>
-				<div className="flex items-center gap-1.5">
-					<span className="text-slate-500 dark:text-slate-400">
-						{current} / {isUnlimited ? "Unlimited" : effectiveMax}
-					</span>
-					{extraQuota > 0 && (
-						<span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full dark:bg-emerald-900/30 dark:text-emerald-400">
-							+{extraQuota}
-						</span>
-					)}
-				</div>
-			</div>
-			<div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-				<div
-					className={clsx(
-						"h-full transition-all duration-500 ease-out",
-						colorClass
-					)}
-					style={{ width: isUnlimited ? "100%" : `${percentage}%` }}
-				/>
-			</div>
-			{!isUnlimited && percentage >= 100 && (
-				<p className="text-xs text-red-600 dark:text-red-400 mt-1">
-					Quota exceeded.{" "}
-					{label === "Completed Interviews"
-						? "Candidates are blocked from starting new interviews."
-						: "Upgrade your plan to continue."}
-				</p>
-			)}
-			{!isUnlimited && percentage >= 80 && percentage < 100 && (
-				<p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
-					Approaching limit.
-				</p>
-			)}
-		</div>
-	);
-};
-
-// ─── Donut colours ──────────────────────────────────────────────────────────
+// ─── Colors ──────────────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, string> = {
-	New: "#1e3a8a",
+	Active: "#1e3a8a",
+	Completed: "#16a34a",
 	Review: "#7c3aed",
-	Interview: "#d97706",
-	Offer: "#16a34a",
-	Rejected: "#dc2626",
 	Cancelled: "#ef4444",
 	Postponed: "#f59e0b",
-	Completed: "#22c55e",
-	Active: "#3b82f6",
-	Pending: "#a855f7",
+	Ended: "#94a3b8",
 };
-
 const FALLBACK_COLORS = [
 	"#3b82f6",
 	"#7c3aed",
@@ -147,115 +72,113 @@ const FALLBACK_COLORS = [
 	"#16a34a",
 	"#ef4444",
 	"#06b6d4",
-	"#f97316",
 ];
-
 function getStatusColor(stage: string, index: number): string {
 	return (
 		STATUS_COLORS[stage] ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length]
 	);
 }
 
-// ─── Activity type icon ──────────────────────────────────────────────────────
+const DEPT_COLORS = [
+	"#1e40af",
+	"#7c3aed",
+	"#16a34a",
+	"#dc2626",
+	"#d97706",
+	"#0891b2",
+];
+
+// ─── Activity icon ─────────────────────────────────────────────────────────
 
 function ActivityIcon({ type }: { type: DashboardActivity["type"] }) {
-	const base = "flex h-8 w-8 shrink-0 items-center justify-center rounded-full";
+	const base = "flex h-9 w-9 shrink-0 items-center justify-center rounded-full";
 	switch (type) {
 		case "interview":
 			return (
-				<span className={`${base} bg-blue-100 dark:bg-blue-900/40`}>
-					<CalendarCheck
-						size={14}
-						className="text-blue-600 dark:text-blue-300"
-					/>
+				<span className={`${base} bg-blue-100`}>
+					<CalendarCheck size={15} className="text-blue-600" />
 				</span>
 			);
 		case "job":
 			return (
-				<span className={`${base} bg-purple-100 dark:bg-purple-900/40`}>
-					<Briefcase
-						size={14}
-						className="text-purple-600 dark:text-purple-300"
-					/>
+				<span className={`${base} bg-purple-100`}>
+					<Briefcase size={15} className="text-purple-600" />
 				</span>
 			);
 		case "offer":
 			return (
-				<span className={`${base} bg-green-100 dark:bg-green-900/40`}>
-					<CheckCircle2
-						size={14}
-						className="text-green-600 dark:text-green-300"
-					/>
+				<span className={`${base} bg-green-100`}>
+					<CheckCircle2 size={15} className="text-green-600" />
 				</span>
 			);
 		case "message":
 			return (
-				<span className={`${base} bg-orange-100 dark:bg-orange-900/40`}>
-					<MessageSquare
-						size={14}
-						className="text-orange-500 dark:text-orange-300"
-					/>
+				<span className={`${base} bg-orange-100`}>
+					<MessageSquare size={15} className="text-orange-500" />
 				</span>
 			);
 		default:
 			return (
-				<span className={`${base} bg-slate-100 dark:bg-slate-800`}>
-					<FileText size={14} className="text-slate-500" />
+				<span className={`${base} bg-slate-100`}>
+					<FileText size={15} className="text-slate-500" />
 				</span>
 			);
 	}
 }
 
-// ─── Skeleton ────────────────────────────────────────────────────────────────
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function DashboardSkeleton() {
 	return (
-		<div className="space-y-6 animate-pulse">
+		<div className="space-y-5 animate-pulse">
 			{/* Metric cards */}
 			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 				{Array.from({ length: 4 }).map((_, i) => (
 					<div
 						key={i}
-						className="rounded-[10px] border border-slate-200 bg-white p-5 dark:border-slate-700/60 dark:bg-slate-900"
+						className="rounded-xl border border-slate-200 bg-white p-5"
 					>
-						<div className="h-10 w-10 rounded-xl bg-slate-200 dark:bg-slate-700 mb-3" />
-						<div className="h-3 w-20 rounded bg-slate-200 dark:bg-slate-700 mb-2" />
-						<div className="h-8 w-12 rounded bg-slate-200 dark:bg-slate-700" />
+						<div className="h-10 w-10 rounded-lg bg-slate-200 mb-4" />
+						<div className="h-3 w-20 rounded bg-slate-200 mb-2" />
+						<div className="h-7 w-14 rounded bg-slate-200 mb-3" />
+						<div className="h-3 w-16 rounded bg-slate-200" />
 					</div>
 				))}
 			</div>
 			{/* Overview */}
-			<div className="rounded-[10px] border border-slate-200 bg-white p-5 dark:border-slate-700/60 dark:bg-slate-900">
-				<div className="h-4 w-36 rounded bg-slate-200 dark:bg-slate-700 mb-4" />
+			<div className="rounded-xl border border-slate-200 bg-white p-5">
+				<div className="h-4 w-40 rounded bg-slate-200 mb-5" />
 				<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 					{Array.from({ length: 4 }).map((_, i) => (
 						<div key={i}>
-							<div className="h-3 w-24 rounded bg-slate-200 dark:bg-slate-700 mb-2" />
-							<div className="h-7 w-20 rounded bg-slate-200 dark:bg-slate-700" />
+							<div className="h-3 w-28 rounded bg-slate-200 mb-2" />
+							<div className="h-7 w-20 rounded bg-slate-200" />
 						</div>
 					))}
 				</div>
 			</div>
-			{/* Charts row */}
+			{/* Charts */}
 			<div className="grid gap-4 lg:grid-cols-5">
-				<div className="lg:col-span-3 rounded-[10px] border border-slate-200 bg-white p-5 dark:border-slate-700/60 dark:bg-slate-900">
-					<div className="h-4 w-32 rounded bg-slate-200 dark:bg-slate-700 mb-4" />
-					<div className="h-56 rounded-xl bg-slate-100 dark:bg-slate-800" />
+				<div className="lg:col-span-3 rounded-xl border border-slate-200 bg-white p-5">
+					<div className="h-4 w-32 rounded bg-slate-200 mb-1" />
+					<div className="h-3 w-48 rounded bg-slate-200 mb-4" />
+					<div className="h-56 rounded-lg bg-slate-100" />
 				</div>
-				<div className="lg:col-span-2 rounded-[10px] border border-slate-200 bg-white p-5 dark:border-slate-700/60 dark:bg-slate-900">
-					<div className="h-4 w-32 rounded bg-slate-200 dark:bg-slate-700 mb-4" />
-					<div className="h-56 rounded-xl bg-slate-100 dark:bg-slate-800" />
+				<div className="lg:col-span-2 rounded-xl border border-slate-200 bg-white p-5">
+					<div className="h-4 w-32 rounded bg-slate-200 mb-1" />
+					<div className="h-3 w-40 rounded bg-slate-200 mb-4" />
+					<div className="h-56 rounded-lg bg-slate-100" />
 				</div>
 			</div>
-			{/* Bottom row */}
 			<div className="grid gap-4 lg:grid-cols-2">
 				{Array.from({ length: 2 }).map((_, i) => (
 					<div
 						key={i}
-						className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700/60 dark:bg-slate-900"
+						className="rounded-xl border border-slate-200 bg-white p-5"
 					>
-						<div className="h-4 w-40 rounded bg-slate-200 dark:bg-slate-700 mb-4" />
-						<div className="h-56 rounded-xl bg-slate-100 dark:bg-slate-800" />
+						<div className="h-4 w-44 rounded bg-slate-200 mb-1" />
+						<div className="h-3 w-28 rounded bg-slate-200 mb-4" />
+						<div className="h-56 rounded-lg bg-slate-100" />
 					</div>
 				))}
 			</div>
@@ -263,19 +186,30 @@ function DashboardSkeleton() {
 	);
 }
 
-// ─── Trend Badge ────────────────────────────────────────────────────────────
+// ─── Trend Chip ───────────────────────────────────────────────────────────────
 
-function TrendBadge({ trend }: { trend: number }) {
+function TrendChip({
+	trend,
+	size = "sm",
+}: {
+	trend: number;
+	size?: "sm" | "xs";
+}) {
 	if (trend === 0) return <span className="text-xs text-slate-400">—</span>;
+	const up = trend > 0;
+	const textSize = size === "xs" ? "text-[11px]" : "text-xs";
 	return (
-		<span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-xs font-semibold text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-			<ArrowUpRight size={11} />
+		<span
+			className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-semibold ${textSize} ${up ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"}`}
+		>
+			<ArrowUpRight size={10} className={up ? "" : "rotate-90"} />
+			{up ? "+" : "-"}
 			{formatTrend(trend)}
 		</span>
 	);
 }
 
-// ─── Card wrapper ────────────────────────────────────────────────────────────
+// ─── Card ─────────────────────────────────────────────────────────────────────
 
 function Card({
 	children,
@@ -286,81 +220,14 @@ function Card({
 }) {
 	return (
 		<div
-			className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700/60 dark:bg-slate-900 dark:shadow-none ${className}`}
+			className={`rounded-xl border border-slate-200 bg-white p-5 shadow-sm ${className}`}
 		>
 			{children}
 		</div>
 	);
 }
 
-// ─── Metric Card ─────────────────────────────────────────────────────────────
-
-const METRIC_CONFIGS = [
-	{
-		key: "activeJobs" as const,
-		label: "Active Jobs",
-		Icon: Briefcase,
-		iconBg: "bg-[#005ca9]",
-		iconColor: "text-white",
-	},
-	{
-		key: "totalCandidates" as const,
-		label: "Candidates",
-		Icon: Users,
-		iconBg: "bg-purple-500",
-		iconColor: "text-white",
-	},
-	{
-		key: "upcomingInterviews" as const,
-		label: "Total Interviews",
-		Icon: CalendarCheck,
-		iconBg: "bg-orange-400",
-		iconColor: "text-white",
-	},
-	{
-		key: "unreadMessages" as const,
-		label: "Messages",
-		Icon: MessageSquare,
-		iconBg: "bg-green-500",
-		iconColor: "text-white",
-	},
-];
-
-// ─── Custom Donut Legend ──────────────────────────────────────────────────────
-
-function DonutLegend({
-	data,
-	total,
-}: {
-	data: { stage: string; value: number }[];
-	total: number;
-}) {
-	return (
-		<div className="flex flex-col gap-2 justify-center">
-			{data.map((item, i) => (
-				<div
-					key={item.stage}
-					className="flex items-center justify-between gap-4"
-				>
-					<div className="flex items-center gap-2 min-w-0">
-						<span
-							className="h-3 w-3 shrink-0 rounded-full"
-							style={{ backgroundColor: getStatusColor(item.stage, i) }}
-						/>
-						<span className="truncate text-sm text-slate-600 dark:text-slate-300">
-							{item.stage}
-						</span>
-					</div>
-					<span className="text-sm font-semibold text-slate-700 dark:text-slate-200 shrink-0">
-						{total > 0 ? `${Math.round((item.value / total) * 100)}%` : "0%"}
-					</span>
-				</div>
-			))}
-		</div>
-	);
-}
-
-// ─── Custom Tooltip ───────────────────────────────────────────────────────────
+// ─── Custom tooltip ────────────────────────────────────────────────────────────
 
 function ChartTooltip({
 	active,
@@ -373,14 +240,10 @@ function ChartTooltip({
 }) {
 	if (!active || !payload?.length) return null;
 	return (
-		<div className="rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-900">
-			<p className="mb-1 text-xs font-semibold text-slate-500">{label}</p>
+		<div className="rounded-lg border border-slate-200 bg-white p-3 shadow-md text-xs">
+			<p className="mb-1 font-semibold text-slate-500">{label}</p>
 			{payload.map((p) => (
-				<p
-					key={p.name}
-					style={{ color: p.color }}
-					className="text-xs font-bold"
-				>
+				<p key={p.name} style={{ color: p.color }} className="font-bold">
 					{p.name}: {p.value}
 				</p>
 			))}
@@ -388,48 +251,84 @@ function ChartTooltip({
 	);
 }
 
-// ─── Main Component ──────────────────────────────────────────────────────────
+// ─── Donut legend ─────────────────────────────────────────────────────────────
+
+function DonutLegend({
+	data,
+	total,
+}: {
+	data: { stage: string; value: number }[];
+	total: number;
+}) {
+	return (
+		<div className="flex flex-col gap-2.5 justify-center min-w-0">
+			{data.map((item, i) => (
+				<div
+					key={item.stage}
+					className="flex items-center justify-between gap-3"
+				>
+					<div className="flex items-center gap-1.5 min-w-0">
+						<span
+							className="h-2.5 w-2.5 shrink-0 rounded-full"
+							style={{ backgroundColor: getStatusColor(item.stage, i) }}
+						/>
+						<span className="text-xs text-slate-600 truncate">
+							{item.stage}
+						</span>
+					</div>
+					<span className="text-xs font-bold text-slate-700 shrink-0">
+						{total > 0 ? `${Math.round((item.value / total) * 100)}%` : "0%"}
+					</span>
+				</div>
+			))}
+		</div>
+	);
+}
+
+// ─── Metric card configs ───────────────────────────────────────────────────────
+
+const METRIC_CONFIGS = [
+	{
+		key: "activeJobs" as const,
+		label: "Active Jobs",
+		Icon: Briefcase,
+		iconBg: "bg-[#005ca9]",
+	},
+	{
+		key: "totalCandidates" as const,
+		label: "Candidates",
+		Icon: Users,
+		iconBg: "bg-purple-500",
+	},
+	{
+		key: "upcomingInterviews" as const,
+		label: "Interviews",
+		Icon: CalendarCheck,
+		iconBg: "bg-orange-400",
+	},
+	{
+		key: "unreadMessages" as const,
+		label: "Messages",
+		Icon: MessageSquare,
+		iconBg: "bg-green-500",
+	},
+];
+
+// ─── Main Component ────────────────────────────────────────────────────────────
 
 const DashboardPage = () => {
-	const { dashboard, loading, getDashboard } = useDashboardStore();
-	const { statistics: interviewStats, getInterviewStatistics } =
-		useInterviewStatisticsStore();
-	// const { subscription, loadingSubscription, getSubscription } =
-	// 	useSubscriptionStore();
+	const { dashboard, loading, getAdminDashboard } = useDashboardStore();
 
 	useEffect(() => {
-		getDashboard();
-	}, [getDashboard]);
+		getAdminDashboard();
+	}, [getAdminDashboard]);
 
-	useEffect(() => {
-		getInterviewStatistics();
-	}, [getInterviewStatistics]);
+	const statusTotal = useMemo(
+		() => (dashboard?.applicationStatus ?? []).reduce((s, a) => s + a.value, 0),
+		[dashboard?.applicationStatus]
+	);
 
-	// useEffect(() => {
-	// 	getSubscription();
-	// }, [getSubscription]);
-
-	const showSkeleton = true;
-
-	// const currentPeriodEnd = subscription?.current_period_end
-	// 	? new Date(subscription.current_period_end).toLocaleDateString("en-US", {
-	// 			month: "2-digit",
-	// 			day: "2-digit",
-	// 			year: "numeric",
-	// 		})
-	// 	: null;
-
-	const currentPeriodEnd = "29-06-2026";
-
-	// const statusTotal = useMemo(
-	// 	() => (dashboard?.applicationStatus ?? []).reduce((s, a) => s + a.value, 0),
-	// 	[dashboard?.applicationStatus]
-	// );
-	const statusTotal = 100;
-	if (showSkeleton) {
-		console.log("here");
-		return <DashboardSkeleton />;
-	}
+	if (loading || !dashboard) return <DashboardSkeleton />;
 
 	const {
 		metrics,
@@ -439,192 +338,142 @@ const DashboardPage = () => {
 		departmentProgress,
 		monthlyGrowth,
 		recentActivities,
-	} = dashboard!;
+	} = dashboard;
+
+	const deptRows =
+		departmentProgress.length > 0
+			? departmentProgress
+			: [
+					{ department: "Engineering", currentHired: 0, targetHires: 0 },
+					{ department: "Sales", currentHired: 0, targetHires: 0 },
+					{ department: "Marketing", currentHired: 0, targetHires: 0 },
+					{ department: "Design", currentHired: 0, targetHires: 0 },
+				];
 
 	return (
-		<div className="space-y-6">
-			{/* Page header */}
+		<div className="space-y-5">
+			{/* ── Page header ─────────────────────────────────────────────────── */}
 			<div className="flex items-center justify-between">
 				<div>
-					<h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-						Agency Dashboard
-					</h1>
-					<p className="text-sm text-slate-500 dark:text-slate-400">
+					<h1 className="text-xl font-bold text-slate-900">Admin Dashboard</h1>
+					<p className="text-sm text-slate-400 mt-0.5">
 						{`Welcome back! Here's what's happening today.`}
 					</p>
 				</div>
-				<Button
+				{/* <Button
 					asChild
-					className="rounded-[10px] bg-[#005ca9] text-[14px] font-semibold text-white hover:bg-[#004e8f] h-10 px-4 transition-colors shadow-sm"
+					className="rounded-lg bg-[#005ca9] text-sm font-semibold text-white hover:bg-[#004e8f] h-9 px-4 shadow-sm"
 				>
 					<Link href="/jobs/new" className="flex items-center gap-1.5">
 						<Plus className="h-4 w-4 stroke-[2.5]" />
 						Post New Job
 					</Link>
-				</Button>
+				</Button> */}
 			</div>
 
-			{/* ── Metric Cards ── */}
-			<div className="grid gap-4  sm:grid-cols-2 lg:grid-cols-4">
-				{METRIC_CONFIGS.map(({ key, label, Icon, iconBg, iconColor }) => (
+			{/* ── Metric cards ────────────────────────────────────────────────── */}
+			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+				{METRIC_CONFIGS.map(({ key, label, Icon, iconBg }) => (
 					<Card key={key}>
 						<div
-							className={`mb-3 flex h-11 w-11 items-center justify-center rounded-[10px] ${iconBg}`}
+							className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg ${iconBg}`}
 						>
-							<Icon size={20} className={iconColor} />
+							<Icon size={18} className="text-white" />
 						</div>
-						<p className="text-sm text-slate-500 dark:text-slate-400">
+						<p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
 							{label}
 						</p>
-						<p className="mt-1 text-3xl font-bold text-slate-900 dark:text-slate-100">
-							{key === "upcomingInterviews"
-								? (interviewStats?.total_scheduled ?? 0).toLocaleString()
-								: metrics[key].toLocaleString()}
+						<p className="mt-1 text-[28px] font-bold leading-none text-slate-900">
+							{metrics[key].value.toLocaleString()}
 						</p>
+						<div className="mt-2 flex items-center gap-1.5">
+							<TrendChip trend={metrics[key].trend} size="xs" />
+							<span className="text-[11px] text-slate-400">vs last week</span>
+						</div>
 					</Card>
 				))}
 			</div>
 
-			{/* ── Quota Usage Card ── */}
+			{/* ── Overview Statistics ─────────────────────────────────────────── */}
 			<Card>
-				<div className="flex flex-col sm:flex-row sm:items-center mb-6 justify-between border-b border-slate-100 pb-4 dark:border-slate-800 gap-4 sm:gap-0">
-					<div>
-						<h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">
-							Quota Usage
-						</h2>
-						{currentPeriodEnd && (
-							<p className="text-xs text-slate-500 dark:text-slate-400">
-								Your current cycle ends on:{" "}
-								<span className="font-semibold text-slate-700 dark:text-slate-300">
-									{currentPeriodEnd}
-								</span>
-							</p>
-						)}
-					</div>
-					<motion.div
-						whileHover={{ x: 5 }}
-						transition={{ type: "spring", stiffness: 400, damping: 10 }}
-					>
-						<Link
-							href="/billing#usage"
-							className="group flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors"
-						>
-							View all
-							<ArrowUpRight className="h-3 w-3 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-						</Link>
-					</motion.div>
-				</div>
-				<div className="grid gap-8 sm:grid-cols-3">
-					<ProgressBar label="Job Postings" current={100} max={200} />
-					<ProgressBar
-						label="Completed Interviews"
-						// current={subscription?.used_interview_sessions || 0}
-						// max={subscription?.plan?.interview_sessions_quota ?? null}
-						// extraQuota={subscription?.extra_interview_quota || 0}
-						current={100}
-						max={200}
-						extraQuota={300}
-					/>
-					<ProgressBar
-						label="Resume Analysis"
-						// current={subscription?.used_resume_analysis || 0}
-						// max={subscription?.plan?.resume_analysis_quota ?? null}
-						// extraQuota={subscription?.extra_cv_scan_quota || 0}
-						current={100}
-						max={200}
-						extraQuota={300}
-					/>
-				</div>
-			</Card>
-
-			{/* ── Overview Statistics ── */}
-			<Card>
-				<div className="flex items-center mb-4 justify-between">
-					<h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-						Overview Statistics
-					</h2>
-				</div>
-				<div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-					{/* Total Jobs */}
-					<div>
-						<p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
-							Total Jobs
-						</p>
+				<h2 className="text-sm font-semibold text-slate-900 mb-4">
+					Overview Statistics
+				</h2>
+				<div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 divide-x divide-slate-100">
+					{/* Enquiries */}
+					<div className="pl-0 pr-4">
+						<p className="text-xs text-slate-500 mb-1">Enquiries</p>
 						<div className="flex items-baseline gap-2">
-							<span className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-								{overview.totalJobs.value}
+							<span className="text-2xl font-bold text-slate-900">
+								{overview.enquiries.value.toLocaleString()}
 							</span>
-							<TrendBadge trend={overview.totalJobs.trend} />
+							<TrendChip trend={overview.enquiries.trend} />
 						</div>
 					</div>
 					{/* New Applicants */}
-					<div>
-						<p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
-							New Applicants
-						</p>
+					<div className="pl-4 pr-4">
+						<p className="text-xs text-slate-500 mb-1">New Applicants</p>
 						<div className="flex items-baseline gap-2">
-							<span className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+							<span className="text-2xl font-bold text-slate-900">
 								{overview.newApplicants.value.toLocaleString()}
 							</span>
-							<TrendBadge trend={overview.newApplicants.trend} />
+							<TrendChip trend={overview.newApplicants.trend} />
 						</div>
 					</div>
 					{/* Interviews Scheduled */}
-					<div>
-						<p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
-							Interviews Scheduled
-						</p>
+					<div className="pl-4 pr-4">
+						<p className="text-xs text-slate-500 mb-1">Interviews Scheduled</p>
 						<div className="flex items-baseline gap-2">
-							<span className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+							<span className="text-2xl font-bold text-slate-900">
 								{overview.interviewsScheduled.value.toLocaleString()}
 							</span>
-							<TrendBadge trend={overview.interviewsScheduled.trend} />
+							<TrendChip trend={overview.interviewsScheduled.trend} />
 						</div>
 					</div>
 					{/* Hiring Success Rate */}
-					<div>
-						<p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
-							Hiring Success Rate
-						</p>
+					<div className="pl-4">
+						<p className="text-xs text-slate-500 mb-1">Hiring Success Rate</p>
 						<div className="flex items-baseline gap-2">
-							<span className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+							<span className="text-2xl font-bold text-slate-900">
 								{formatPercent(overview.hiringSuccessRate.value)}
 							</span>
-							<TrendBadge trend={overview.hiringSuccessRate.trend} />
+							<TrendChip trend={overview.hiringSuccessRate.trend} />
 						</div>
 					</div>
 				</div>
 			</Card>
 
-			{/* ── Weekly Activity  +  Application Status ── */}
+			{/* ── Weekly Activity + Application Status ────────────────────────── */}
 			<div className="grid gap-4 lg:grid-cols-5">
-				{/* Weekly Activity chart */}
+				{/* Weekly Activity */}
 				<Card className="lg:col-span-3">
-					<div className="mb-1">
-						<h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-							Weekly Activity
-						</h2>
-						<p className="text-xs text-slate-400">
-							Applications, Interviews &amp; Offers
-						</p>
-					</div>
-					<div className="mt-4 h-60">
+					<h2 className="text-sm font-semibold text-slate-900">
+						Weekly Activity
+					</h2>
+					<p className="text-xs text-slate-400 mt-0.5">
+						Applications &amp; Interviews this week
+					</p>
+					<div className="mt-4 h-[220px]">
 						<ResponsiveContainer width="100%" height="100%">
 							<AreaChart
 								data={weeklyActivity}
-								margin={{ top: 4, right: 4, left: -16, bottom: 0 }}
+								margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
 							>
 								<defs>
-									<linearGradient id="gradApps" x1="0" y1="0" x2="0" y2="1">
-										<stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} />
+									<linearGradient id="gApps" x1="0" y1="0" x2="0" y2="1">
+										<stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
 										<stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
 									</linearGradient>
-									<linearGradient id="gradInts" x1="0" y1="0" x2="0" y2="1">
-										<stop offset="5%" stopColor="#f59e0b" stopOpacity={0.25} />
+									<linearGradient id="gInts" x1="0" y1="0" x2="0" y2="1">
+										<stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2} />
 										<stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
 									</linearGradient>
 								</defs>
-								<CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+								<CartesianGrid
+									strokeDasharray="3 3"
+									stroke="#f1f5f9"
+									vertical={false}
+								/>
 								<XAxis
 									dataKey="day"
 									tick={{ fontSize: 11, fill: "#94a3b8" }}
@@ -640,30 +489,26 @@ const DashboardPage = () => {
 								<Tooltip content={<ChartTooltip />} />
 								<Legend
 									iconType="circle"
-									iconSize={8}
-									wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
-									formatter={(value) => (
-										<span className="text-slate-500 dark:text-slate-400">
-											{value}
-										</span>
-									)}
+									iconSize={7}
+									wrapperStyle={{ fontSize: "11px", paddingTop: "6px" }}
+									formatter={(v) => <span className="text-slate-500">{v}</span>}
 								/>
 								<Area
 									type="monotone"
 									dataKey="applications"
-									name="Applications"
+									name="applications"
 									stroke="#3b82f6"
 									strokeWidth={2}
-									fill="url(#gradApps)"
+									fill="url(#gApps)"
 									dot={false}
 								/>
 								<Area
 									type="monotone"
 									dataKey="interviews"
-									name="Interviews"
+									name="visits"
 									stroke="#f59e0b"
 									strokeWidth={2}
-									fill="url(#gradInts)"
+									fill="url(#gInts)"
 									dot={false}
 								/>
 							</AreaChart>
@@ -671,23 +516,21 @@ const DashboardPage = () => {
 					</div>
 				</Card>
 
-				{/* Application Status donut */}
+				{/* Application Status */}
 				<Card className="lg:col-span-2">
-					<div className="mb-1">
-						<h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-							Application Status
-						</h2>
-						<p className="text-xs text-slate-400">
-							Current distribution by stage
-						</p>
-					</div>
+					<h2 className="text-sm font-semibold text-slate-900">
+						Application Status
+					</h2>
+					<p className="text-xs text-slate-400 mt-0.5">
+						Current distribution by stage
+					</p>
 					{applicationStatus.length === 0 ? (
-						<div className="flex h-56 items-center justify-center text-sm text-slate-400">
-							No data available
+						<div className="flex h-[220px] items-center justify-center text-sm text-slate-400">
+							No data
 						</div>
 					) : (
-						<div className="mt-2 flex items-center gap-4">
-							<div className="h-52 w-52 shrink-0">
+						<div className="mt-3 flex items-center gap-3">
+							<div className="h-[180px] w-[180px] shrink-0">
 								<ResponsiveContainer width="100%" height="100%">
 									<PieChart>
 										<Pie
@@ -696,9 +539,9 @@ const DashboardPage = () => {
 											nameKey="stage"
 											cx="50%"
 											cy="50%"
-											innerRadius={52}
-											outerRadius={80}
-											paddingAngle={3}
+											innerRadius={50}
+											outerRadius={78}
+											paddingAngle={2}
 											strokeWidth={0}
 										>
 											{applicationStatus.map((entry, index) => (
@@ -723,102 +566,66 @@ const DashboardPage = () => {
 				</Card>
 			</div>
 
-			{/* ── Department Hiring Progress  +  Monthly Growth ── */}
+			{/* ── Department Progress + Monthly Growth ────────────────────────── */}
 			<div className="grid gap-4 lg:grid-cols-2">
-				{/* Department progress */}
+				{/* Department Hiring Progress */}
 				<Card className="flex flex-col">
-					<div className="mb-4">
-						<h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-							Department Hiring Progress
-						</h2>
-						<p className="text-xs text-slate-400">Current vs Target</p>
-					</div>
-					<div className="flex-1 overflow-y-auto pr-2 custom-scrollbar max-h-[280px]">
-						<div className="space-y-5">
-							{(function () {
-								const defaults = [
-									{
-										department: "Engineering",
-										currentHired: 0,
-										targetHires: 0,
-									},
-									{ department: "Sales", currentHired: 0, targetHires: 0 },
-									{ department: "Marketing", currentHired: 0, targetHires: 0 },
-									{ department: "Design", currentHired: 0, targetHires: 0 },
-								];
-
-								// Merge backend data over defaults
-								const merged = [...defaults];
-								departmentProgress.forEach((dp) => {
-									const index = merged.findIndex(
-										(d) =>
-											d.department.toLowerCase() === dp.department.toLowerCase()
-									);
-									if (index !== -1) {
-										merged[index] = dp;
-									} else {
-										merged.push(dp);
-									}
-								});
-
-								return merged.map(
-									({ department, currentHired, targetHires }, i) => {
-										const pct =
-											targetHires > 0
-												? Math.min(
-														100,
-														Math.round((currentHired / targetHires) * 100)
-													)
-												: 0;
-										const barColors = [
-											"#1e40af",
-											"#7c3aed",
-											"#16a34a",
-											"#dc2626",
-											"#d97706",
-										];
-										const color = barColors[i % barColors.length];
-										return (
-											<div key={department}>
-												<div className="flex items-center justify-between mb-1.5">
-													<span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-														{department}
-													</span>
-													<span className="text-xs text-slate-400">
-														{currentHired}/{targetHires} &nbsp;{" "}
-														<span className="font-semibold text-slate-600 dark:text-slate-300">
-															{pct}%
-														</span>
-													</span>
-												</div>
-												<div className="h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800">
-													<div
-														className="h-2.5 rounded-full transition-all duration-700"
-														style={{ width: `${pct}%`, backgroundColor: color }}
-													/>
-												</div>
-											</div>
-										);
-									}
-								);
-							})()}
-						</div>
+					<h2 className="text-sm font-semibold text-slate-900">
+						Department Hiring Progress
+					</h2>
+					<p className="text-xs text-slate-400 mt-0.5 mb-4">
+						Progress to target
+					</p>
+					<div className="flex-1 space-y-4 overflow-y-auto max-h-70 pr-1">
+						{deptRows.map(({ department, currentHired, targetHires }, i) => {
+							const pct =
+								targetHires > 0
+									? Math.min(
+											100,
+											Math.round((currentHired / targetHires) * 100)
+										)
+									: 0;
+							return (
+								<div key={department}>
+									<div className="flex items-center justify-between mb-1.5">
+										<span className="text-sm font-medium text-slate-700">
+											{department}
+										</span>
+										<span className="text-xs text-slate-400">
+											{currentHired}/{targetHires}&nbsp;
+											<span className="font-semibold text-slate-600">
+												{pct}%
+											</span>
+										</span>
+									</div>
+									<div className="h-2 w-full rounded-full bg-slate-100">
+										<div
+											className="h-2 rounded-full transition-all duration-700"
+											style={{
+												width: `${pct}%`,
+												backgroundColor: DEPT_COLORS[i % DEPT_COLORS.length],
+											}}
+										/>
+									</div>
+								</div>
+							);
+						})}
 					</div>
 				</Card>
 
-				{/* Monthly Growth bar chart */}
+				{/* Monthly Growth */}
 				<Card>
-					<div className="mb-1">
-						<h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-							Monthly Growth
-						</h2>
-						<p className="text-xs text-slate-400">Application volume trend</p>
-					</div>
-					<div className="mt-2 h-52">
+					<h2 className="text-sm font-semibold text-slate-900">
+						Monthly Growth
+					</h2>
+					<p className="text-xs text-slate-400 mt-0.5">
+						Application volume trend
+					</p>
+					<div className="mt-3 h-[190px]">
 						<ResponsiveContainer width="100%" height="100%">
 							<BarChart
 								data={monthlyGrowth.chartData}
-								margin={{ top: 4, right: 4, left: -16, bottom: 0 }}
+								margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
 							>
 								<CartesianGrid
 									strokeDasharray="3 3"
@@ -842,22 +649,20 @@ const DashboardPage = () => {
 									dataKey="applications"
 									name="Applications"
 									fill="#2563eb"
-									radius={[4, 4, 0, 0]}
+									radius={[3, 3, 0, 0]}
 								/>
 							</BarChart>
 						</ResponsiveContainer>
 					</div>
-					<div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
-						<p className="text-xs uppercase tracking-wide text-slate-400">
-							Current Month
-						</p>
-						<div className="flex items-baseline gap-2 mt-0.5">
-							<span className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+					<div className="mt-3 border-t border-slate-100 pt-3 flex items-baseline justify-between">
+						<p className="text-xs text-slate-400">Total this month</p>
+						<div className="flex items-baseline gap-1.5">
+							<span className="text-xl font-bold text-slate-900">
 								{monthlyGrowth.currentMonth.total.toLocaleString()}
 							</span>
 							{monthlyGrowth.currentMonth.trend !== 0 && (
 								<span className="flex items-center gap-0.5 text-xs font-semibold text-emerald-500">
-									<TrendingUp size={12} />+
+									<TrendingUp size={11} />+
 									{monthlyGrowth.currentMonth.trend.toFixed(1)}%
 								</span>
 							)}
@@ -866,24 +671,22 @@ const DashboardPage = () => {
 				</Card>
 			</div>
 
-			{/* ── Recent Activity ── */}
+			{/* ── Recent Activity ──────────────────────────────────────────────── */}
 			<Card>
-				<div className="flex items-center justify-between mb-4">
-					<div>
-						<h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-							Recent Activity
-						</h2>
-						<p className="text-xs text-emerald-500 font-medium">
-							+{recentActivities.length} this week
-						</p>
-					</div>
+				<div className="mb-4">
+					<h2 className="text-sm font-semibold text-slate-900">
+						Recent Activity
+					</h2>
+					<p className="text-xs text-emerald-500 font-medium mt-0.5">
+						+{recentActivities.length} this week
+					</p>
 				</div>
 				{recentActivities.length === 0 ? (
 					<p className="text-sm text-slate-400 text-center py-8">
 						No recent activity
 					</p>
 				) : (
-					<div className="divide-y divide-slate-100 dark:divide-slate-800">
+					<div className="divide-y divide-slate-100">
 						{recentActivities.map((activity, i) => (
 							<div
 								key={`${activity.id}-${i}`}
@@ -891,16 +694,16 @@ const DashboardPage = () => {
 							>
 								<ActivityIcon type={activity.type} />
 								<div className="min-w-0 flex-1">
-									<p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
+									<p className="text-sm font-medium text-slate-800 truncate">
 										{activity.title}
 									</p>
 									{activity.description && (
-										<p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+										<p className="text-xs text-slate-400 truncate mt-0.5">
 											{activity.description}
 										</p>
 									)}
 								</div>
-								<div className="shrink-0 flex items-center gap-1 text-xs text-slate-400">
+								<div className="shrink-0 flex items-center gap-1 text-[11px] text-slate-400">
 									<Clock size={11} />
 									{timeAgo(activity.timestamp)}
 								</div>

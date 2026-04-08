@@ -390,13 +390,13 @@ const ResumeClient = () => {
 			<div className="flex flex-wrap gap-4">
 				<AnalyticsCard
 					title="Total candidates"
-					count={dashboard?.metrics?.totalCandidates ?? "-"}
+					count={dashboard?.metrics?.totalCandidates?.value ?? "-"}
 					icon={Users}
 					colorClass="bg-[#2dd4bf]"
 				/>
 				<AnalyticsCard
 					title="Active jobs"
-					count={dashboard?.metrics?.activeJobs ?? "-"}
+					count={dashboard?.metrics?.activeJobs?.value ?? "-"}
 					icon={Briefcase}
 					colorClass="bg-[#a78bfa]"
 				/>
