@@ -1,3 +1,4 @@
+// --- datasource.prisma ---
 generator client {
   provider      = "prisma-client-js"
   output        = "../src/generated/prisma"
@@ -143,6 +144,7 @@ enum InboxType {
   batch
   application
   interview
+  billing
 }
 
 enum InboxStatus {
@@ -456,8 +458,7 @@ model Agency {
 
   interview_resources InterviewResources[]
 
-  interview_sessions InterviewSession[]
-
+  interview_sessions        InterviewSession[]
   subscription_transactions SubscriptionTransaction[]
 
   created_at DateTime @default(now())
@@ -570,25 +571,7 @@ model WalkthroughRequest {
   preferred_time   String
   timezone         String
   additional_notes String?
-
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-}
-
-// --- voucher.prisma ---
-model Voucher {
-  id             Int          @id @default(autoincrement())
-  code           String       @unique
-  discount       Float
-  type           DiscountType
-  usage_limit    Int?
-  usage_count    Int          @default(0)
-  expires_at     DateTime?
-  is_active      Boolean      @default(true)
-  plans          String[]     @default([])
-  features       String[]     @default([])
-  color          String       @default("#3b82f6")
-  revenue_impact Float        @default(0)
+  google_meet_link String?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -614,34 +597,11 @@ model SubscriptionPlan {
   color                    String   @default("#3b82f6")
   is_public                Boolean  @default(true)
 
-  agency_subscriptions     AgencySubscription[]
-  transactions             SubscriptionTransaction[]
+  agency_subscriptions AgencySubscription[]
+  transactions         SubscriptionTransaction[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
-}
-
-model SubscriptionTransaction {
-  id        Int               @id @default(autoincrement())
-  amount    Float
-  status    TransactionStatus @default(PENDING)
-
-  agency_id Int
-  agency    Agency @relation(fields: [agency_id], references: [id], onDelete: Cascade)
-
-  plan_id Int
-  plan    SubscriptionPlan @relation(fields: [plan_id], references: [id])
-
-  stripe_payment_intent_id String?
-  agency_name_snapshot     String?
-
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  @@index([agency_id])
-  @@index([plan_id])
-  @@index([created_at])
-  @@index([status])
 }
 
 model AgencySubscription {
@@ -678,6 +638,29 @@ model AgencySubscription {
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+}
+
+model SubscriptionTransaction {
+  id     Int               @id @default(autoincrement())
+  amount Float
+  status TransactionStatus @default(PENDING)
+
+  agency_id Int
+  agency    Agency @relation(fields: [agency_id], references: [id], onDelete: Cascade)
+
+  plan_id Int
+  plan    SubscriptionPlan @relation(fields: [plan_id], references: [id])
+
+  stripe_payment_intent_id String?
+  agency_name_snapshot     String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([agency_id])
+  @@index([plan_id])
+  @@index([created_at])
+  @@index([status])
 }
 
 // --- job.prisma ---
@@ -782,7 +765,7 @@ model Invitation {
   id Int @id @default(autoincrement())
 
   to_id Int    @unique
-  to    Resume @relation(fields: [to_id], references: [id])
+  to    Resume @relation(fields: [to_id], references: [id], onDelete: Cascade)
 
   from_id Int
   from    Agency @relation(fields: [from_id], references: [id])
@@ -1180,7 +1163,26 @@ model JobApplicationDocument {
   updated_at DateTime @updatedAt
 }
 
-// --- platform-settings.prisma ---
+// --- voucher.prisma ---
+model Voucher {
+  id             Int          @id @default(autoincrement())
+  code           String       @unique
+  discount       Float
+  type           DiscountType
+  usage_limit    Int?
+  usage_count    Int          @default(0)
+  expires_at     DateTime?
+  is_active      Boolean      @default(true)
+  plans          String[]     @default([])
+  features       String[]     @default([])
+  color          String       @default("#3b82f6")
+  revenue_impact Float        @default(0)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+// --- settings.prisma ---
 model PlatformSettings {
   id                  Int     @id @default(1)
   platform_name       String  @default("Plato")
@@ -1193,33 +1195,33 @@ model PlatformSettings {
   updated_at DateTime @updatedAt
 }
 
-// --- system-log.prisma ---
+// --- logs.prisma ---
 model SystemLog {
-  id               Int      @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
   // What happened
-  action           String   // CREATE | UPDATE | DELETE | READ
-  table_name       String   // jobs | vouchers | admins | etc.
-  record_id        String?  // affected record's ID as string
+  action     String // CREATE | UPDATE | DELETE | READ
+  table_name String // jobs | vouchers | admins | etc.
+  record_id  String? // affected record's ID as string
 
   // Who did it
-  changed_by       String   // admin email
-  changed_by_role  String   @default("super_admin")
-  source           String   @default("ADMIN") // ADMIN | API | WEBHOOK | CRON
+  changed_by      String // admin email
+  changed_by_role String @default("super_admin")
+  source          String @default("ADMIN") // ADMIN | API | WEBHOOK | CRON
 
   // Request info
-  method           String?  // GET | POST | PUT | DELETE
-  path             String?  // /api/jobs/123
-  ip               String?
+  method String? // GET | POST | PUT | DELETE
+  path   String? // /api/jobs/123
+  ip     String?
 
   // Result
-  status           String   @default("SUCCESS") // SUCCESS | FAILED
-  error_msg        String?
+  status    String  @default("SUCCESS") // SUCCESS | FAILED
+  error_msg String?
 
   // Extra context (e.g. changed fields snapshot)
-  meta             Json?
+  meta Json?
 
-  created_at       DateTime @default(now())
+  created_at DateTime @default(now())
 
   @@index([table_name])
   @@index([changed_by])
