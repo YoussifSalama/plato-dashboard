@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SignJWT } from "jose";
 import { verifyAdminRequest } from "@/lib/admin-guard";
+import { prisma } from "@/lib/prisma";
 
 // POST /api/agency-token
 // Generates a short-lived agency JWT server-side (where JWT_ACCESS_SECRET is available).
@@ -19,7 +20,8 @@ export async function POST(request: NextRequest) {
 		return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
 	}
 
-	const accountId = body.account_id;
+	const accountId = Number(body.account_id);
+	const account = await prisma.account.findFirst({ where: { id: accountId } });
 	if (!accountId && accountId !== 0) {
 		return NextResponse.json(
 			{ message: "account_id is required" },
@@ -35,7 +37,11 @@ export async function POST(request: NextRequest) {
 		);
 	}
 
-	const token = await new SignJWT({ id: accountId, provider: "super_admin" })
+	const token = await new SignJWT({
+		id: accountId,
+		provider: "admin",
+		email: account?.email ?? "",
+	})
 		.setProtectedHeader({ alg: "HS256" })
 		.setExpirationTime("15m")
 		.setIssuedAt()
