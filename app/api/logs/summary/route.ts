@@ -93,11 +93,12 @@ export async function GET(request: NextRequest) {
 		actionMap[r.action] = r._count.action;
 	});
 
-	const totalActions = Object.values(actionMap).reduce((s, v) => s + v, 0) || 1;
+	// Return raw counts so the frontend can compute accurate percentages without
+	// rounding-to-zero problems (e.g. one action at 99.8% making others show 0%).
 	const actionDistribution = [
-		{ name: "CREATE", value: Math.round(((actionMap["CREATE"] ?? 0) / totalActions) * 100), fill: "#1d4ed8" },
-		{ name: "UPDATE", value: Math.round(((actionMap["UPDATE"] ?? 0) / totalActions) * 100), fill: "#22c55e" },
-		{ name: "DELETE", value: Math.round(((actionMap["DELETE"] ?? 0) / totalActions) * 100), fill: "#ef4444" },
+		{ name: "CREATE", count: actionMap["CREATE"] ?? 0, fill: "#1d4ed8" },
+		{ name: "UPDATE", count: actionMap["UPDATE"] ?? 0, fill: "#22c55e" },
+		{ name: "DELETE", count: actionMap["DELETE"] ?? 0, fill: "#ef4444" },
 	];
 
 	// ── Table options from actual data ────────────────────────────────────────
