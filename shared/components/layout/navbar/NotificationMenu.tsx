@@ -7,8 +7,10 @@ import {
 	Briefcase,
 	Calendar,
 	CheckCheck,
+	CircleAlert,
 	FileText,
 	Mail,
+	MessageCircleWarning,
 } from "lucide-react";
 import clsx from "clsx";
 import useInboxStore, {
@@ -29,12 +31,14 @@ import { formatDistanceToNow } from "date-fns";
 const resolveIcon = (type: InboxType) => {
 	const className = "h-4 w-4 text-blue-600 dark:text-blue-400";
 	switch (type) {
-		case "application":
+		case "new_application":
 			return <Briefcase className={className} />;
-		case "interview":
+		case "interview_completed":
 			return <Calendar className={className} />;
-		case "batch":
+		case "batch_failed":
 			return <FileText className={className} />;
+		case "failed_log":
+			return <CircleAlert className={clsx(className, "text-red-500")} />;
 		default:
 			return <Bell className={className} />;
 	}
@@ -141,11 +145,11 @@ const NotificationMenu = () => {
 											>
 												{resolveIcon(item.type)}
 											</div>
-											<div className="flex flex-1 flex-col gap-1">
+											<div className="flex min-w-0 flex-1 flex-col gap-1">
 												<div className="flex items-start justify-between gap-2">
 													<span
 														className={clsx(
-															"line-clamp-1 text-sm",
+															"min-w-0 line-clamp-1 text-sm",
 															!isRead
 																? "font-semibold text-blue-900 dark:text-blue-100"
 																: "font-medium text-slate-700 dark:text-slate-300"
@@ -162,7 +166,7 @@ const NotificationMenu = () => {
 													)}
 												</div>
 												{item.description && (
-													<p className="line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
+													<p className="line-clamp-2 break-all text-xs text-slate-500 dark:text-slate-400">
 														{item.description}
 													</p>
 												)}
