@@ -74,7 +74,7 @@ type SummaryData = {
 		failed: number;
 		total: number;
 	}[];
-	actionDistribution: { name: string; value: number; fill: string }[];
+	actionDistribution: { name: string; count: number; fill: string }[];
 	tableOptions: string[];
 };
 
@@ -91,9 +91,9 @@ const MOCK_ACTIVITY_DATA = [
 ];
 
 const MOCK_DISTRIBUTION_DATA = [
-	{ name: "SUCCESS", value: 55, fill: "#1d4ed8" },
-	{ name: "UPDATE", value: 36, fill: "#22c55e" },
-	{ name: "FAILED", value: 9, fill: "#ef4444" },
+	{ name: "CREATE", count: 55, fill: "#1d4ed8" },
+	{ name: "UPDATE", count: 36, fill: "#22c55e" },
+	{ name: "DELETE", count: 9,  fill: "#ef4444" },
 ];
 
 const MOCK_LOGS: LogEntry[] = [
@@ -953,48 +953,61 @@ const LogsPage = () => {
 					<h3 className="text-[15px] font-bold text-slate-800 dark:text-slate-100 mb-4">
 						Action Distribution
 					</h3>
-					<div className="flex justify-center">
-						<ResponsiveContainer width="100%" height={250}>
-							<PieChart>
-								<Pie
-									data={distributionData}
-									cx="50%"
-									cy="50%"
-									innerRadius={0}
-									outerRadius={85}
-									paddingAngle={2}
-									dataKey="value"
-									label={false}
-									labelLine={false}
-								/>
-								<Tooltip
-									formatter={(value) => [`${value}%`, ""]}
-									contentStyle={{ fontSize: 12, borderRadius: 10 }}
-								/>
-							</PieChart>
-						</ResponsiveContainer>
-					</div>
-					<div className="mt-2 space-y-2">
-						{distributionData.map((d, i) => (
-							<div
-								key={d.name}
-								className="flex items-center justify-between text-[12px]"
-							>
-								<div className="flex items-center gap-2">
-									<span
-										className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
-										style={{ backgroundColor: d.fill }}
-									/>
-									<span className="text-slate-500 dark:text-slate-400">
-										({i + 1}) {d.name}
-									</span>
-								</div>
-								<span className="font-bold text-slate-700 dark:text-slate-200">
-									{d.value}%
-								</span>
+					{(() => {
+						const totalCount = distributionData.reduce((s, d) => s + d.count, 0);
+						const pct = (count: number) =>
+							totalCount > 0 ? ((count / totalCount) * 100).toFixed(1) : "0.0";
+						return totalCount === 0 ? (
+							<div className="flex h-70 items-center justify-center text-sm text-slate-400">
+								No action data yet
 							</div>
-						))}
-					</div>
+						) : (
+							<>
+								<div className="flex justify-center">
+									<ResponsiveContainer width="100%" height={250}>
+										<PieChart>
+											<Pie
+												data={distributionData}
+												cx="50%"
+												cy="50%"
+												innerRadius={0}
+												outerRadius={85}
+												paddingAngle={2}
+												dataKey="count"
+												label={false}
+												labelLine={false}
+											/>
+											<Tooltip
+												formatter={(value, name) => [`${value} (${pct(Number(value))}%)`, name]}
+												contentStyle={{ fontSize: 12, borderRadius: 10 }}
+											/>
+										</PieChart>
+									</ResponsiveContainer>
+								</div>
+								<div className="mt-2 space-y-2">
+									{distributionData.map((d, i) => (
+										<div
+											key={d.name}
+											className="flex items-center justify-between text-[12px]"
+										>
+											<div className="flex items-center gap-2">
+												<span
+													className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+													style={{ backgroundColor: d.fill }}
+												/>
+												<span className="text-slate-500 dark:text-slate-400">
+													({i + 1}) {d.name}
+												</span>
+											</div>
+											<span className="font-bold text-slate-700 dark:text-slate-200">
+												{pct(d.count)}%
+											</span>
+										</div>
+									))}
+								</div>
+							</>
+						);
+					})()}
 				</div>
 			</div>
 

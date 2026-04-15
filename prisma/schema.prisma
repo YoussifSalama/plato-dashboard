@@ -253,6 +253,22 @@ enum ApplicationSource {
   invitation
 }
 
+enum AdminInboxType {
+  agency_signup
+  candidate_signup
+  interview_completed
+  subscription_payment
+  batch_failed
+  new_application
+  failed_log
+}
+
+enum AdminInboxStatus {
+  unread
+  read
+  archived
+}
+
 // --- resume.prisma ---
 model Resume {
   id        Int             @id @default(autoincrement())
@@ -1071,8 +1087,9 @@ model InterviewSession {
   close_without_confirm_postpone_count Int                             @default(0)
   ai_live_notes                        String?
 
-  qa_log Json
-  record String?
+  qa_log             Json
+  record             String?
+  is_record_unlocked Boolean @default(false)
 
   created_at   DateTime @default(now())
   completed_at DateTime @default(now())
@@ -1232,6 +1249,7 @@ model SystemLog {
 }
 
 // --- admin.prisma ---
+// --- admin.prisma ---
 model Admin {
   id        Int     @id @default(autoincrement())
   email     String  @unique
@@ -1285,4 +1303,22 @@ model AdminOtp {
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+}
+
+model AdminInbox {
+  id          Int              @id @default(autoincrement())
+  type        AdminInboxType
+  status      AdminInboxStatus @default(unread)
+  severity    InboxSeverity    @default(info)
+  title       String
+  description String?
+  meta        Json?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([status])
+  @@index([type])
+  @@index([created_at])
+  @@index([severity])
 }
