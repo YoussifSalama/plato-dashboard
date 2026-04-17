@@ -214,11 +214,20 @@ function TrendChip({
 function Card({
 	children,
 	className = "",
+	href,
 }: {
 	children: React.ReactNode;
 	className?: string;
+	href?: string;
 }) {
-	return (
+	return href ? (
+		<Link
+			href={href}
+			className={`rounded-xl border border-slate-200 bg-white p-5 shadow-sm ${className}`}
+		>
+			{children}
+		</Link>
+	) : (
 		<div
 			className={`rounded-xl border border-slate-200 bg-white p-5 shadow-sm ${className}`}
 		>
@@ -293,31 +302,39 @@ const METRIC_CONFIGS = [
 		label: "Active Jobs",
 		Icon: Briefcase,
 		iconBg: "bg-[#005ca9]",
+		href: "/jobs",
 	},
 	{
 		key: "totalCandidates" as const,
 		label: "Candidates",
 		Icon: Users,
 		iconBg: "bg-purple-500",
+		href: "/candidates",
 	},
 	{
 		key: "upcomingInterviews" as const,
 		label: "Interviews",
 		Icon: CalendarCheck,
 		iconBg: "bg-orange-400",
+		href: "/interviews",
 	},
 	{
 		key: "unreadMessages" as const,
 		label: "Messages",
 		Icon: MessageSquare,
 		iconBg: "bg-green-500",
+		href: "/inbox",
 	},
 ];
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 const DashboardPage = () => {
-	const { dashboard, loading, getAdminDashboard } = useDashboardStore();
+	const {
+		adminDashboard: dashboard,
+		loading,
+		getAdminDashboard,
+	} = useDashboardStore();
 
 	useEffect(() => {
 		getAdminDashboard();
@@ -373,8 +390,8 @@ const DashboardPage = () => {
 
 			{/* ── Metric cards ────────────────────────────────────────────────── */}
 			<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-				{METRIC_CONFIGS.map(({ key, label, Icon, iconBg }) => (
-					<Card key={key}>
+				{METRIC_CONFIGS.map(({ key, label, Icon, iconBg, href }) => (
+					<Card key={key} href={href}>
 						<div
 							className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg ${iconBg}`}
 						>

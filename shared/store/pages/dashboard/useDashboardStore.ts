@@ -80,10 +80,20 @@ export type AgencyDashboardData = {
 	recentActivities: DashboardActivity[];
 };
 
+export type AdminDashboardData = {
+	metrics: DashboardMetrics;
+	overview: DashboardOverview;
+	weeklyActivity: DashboardWeeklyActivity[];
+	applicationStatus: DashboardApplicationStatus[];
+	departmentProgress: DashboardDeptProgress[];
+	monthlyGrowth: DashboardMonthlyGrowth;
+	recentActivities: DashboardActivity[];
+};
 // ── Store ──────────────────────────────────────────────────────────────────
 
 interface DashboardStore {
 	dashboard: AgencyDashboardData | null;
+	adminDashboard: AdminDashboardData | null;
 	loading: boolean;
 	getDashboard: (
 		accountId?: string | number
@@ -95,6 +105,7 @@ interface DashboardStore {
 const useDashboardStore = create<DashboardStore>((set) => ({
 	dashboard: null,
 	loading: false,
+	adminDashboard: null,
 	getDashboard: async (accountId) => {
 		if (!accountId) return null;
 		const token = await getAgencyToken(accountId);
@@ -119,17 +130,17 @@ const useDashboardStore = create<DashboardStore>((set) => ({
 		set({ loading: true });
 		try {
 			const response = await apiClient.get("/api/dashboard");
-			const dashboard = response.data?.data as AgencyDashboardData;
-			set({ dashboard });
-			return dashboard;
+			const adminDashboard = response.data?.data as AgencyDashboardData;
+			set({ adminDashboard });
+			return adminDashboard;
 		} catch {
-			set({ dashboard: null });
+			set({ adminDashboard: null });
 			return null;
 		} finally {
 			set({ loading: false });
 		}
 	},
-	clear: () => set({ dashboard: null, loading: false }),
+	clear: () => set({ adminDashboard: null, loading: false }),
 }));
 
 export default useDashboardStore;

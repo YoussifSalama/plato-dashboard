@@ -14,8 +14,18 @@ function calcTrend(current: number, previous: number): number {
 }
 
 const MONTH_NAMES = [
-	"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec",
 ];
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -99,7 +109,7 @@ export async function GET(request: NextRequest) {
 		// ── Metric card current values ──
 		prisma.job.count({ where: { is_active: true } }),
 		prisma.candidate.count(),
-		prisma.inbox.count({ where: { status: "unread" } }),
+		prisma.adminInbox.count({ where: { status: "unread" } }),
 		prisma.interviewSession.count({ where: { status: "active" } }),
 
 		// ── Metric card trends ──
@@ -108,9 +118,15 @@ export async function GET(request: NextRequest) {
 		prisma.candidate.count({ where: { created_at: { gte: d7 } } }),
 		prisma.candidate.count({ where: { created_at: { gte: d14, lt: d7 } } }),
 		prisma.interviewSession.count({ where: { created_at: { gte: d7 } } }),
-		prisma.interviewSession.count({ where: { created_at: { gte: d14, lt: d7 } } }),
-		prisma.inbox.count({ where: { status: "unread", created_at: { gte: d7 } } }),
-		prisma.inbox.count({ where: { status: "unread", created_at: { gte: d14, lt: d7 } } }),
+		prisma.interviewSession.count({
+			where: { created_at: { gte: d14, lt: d7 } },
+		}),
+		prisma.adminInbox.count({
+			where: { status: "unread", created_at: { gte: d7 } },
+		}),
+		prisma.adminInbox.count({
+			where: { status: "unread", created_at: { gte: d14, lt: d7 } },
+		}),
 
 		// ── Overview current 30-day ──
 		prisma.resume.count({ where: { created_at: { gte: d30 } } }),
@@ -119,7 +135,9 @@ export async function GET(request: NextRequest) {
 
 		// ── Overview previous 30-day ──
 		prisma.resume.count({ where: { created_at: { gte: d60, lt: d30 } } }),
-		prisma.interviewSession.count({ where: { created_at: { gte: d60, lt: d30 } } }),
+		prisma.interviewSession.count({
+			where: { created_at: { gte: d60, lt: d30 } },
+		}),
 		prisma.job.count({ where: { created_at: { gte: d60, lt: d30 } } }),
 
 		// ── Hiring success rate ──
@@ -195,14 +213,23 @@ export async function GET(request: NextRequest) {
 	const weeklyData = Array.from({ length: 7 }, (_, i) => {
 		const d = new Date(now);
 		d.setDate(d.getDate() - (6 - i));
-		return { day: DAY_NAMES[d.getDay()], date: d.toDateString(), applications: 0, interviews: 0 };
+		return {
+			day: DAY_NAMES[d.getDay()],
+			date: d.toDateString(),
+			applications: 0,
+			interviews: 0,
+		};
 	});
 	weeklyResumes.forEach((r) => {
-		const entry = weeklyData.find((d) => d.date === new Date(r.created_at).toDateString());
+		const entry = weeklyData.find(
+			(d) => d.date === new Date(r.created_at).toDateString()
+		);
 		if (entry) entry.applications++;
 	});
 	weeklyInterviewSessions.forEach((s) => {
-		const entry = weeklyData.find((d) => d.date === new Date(s.created_at).toDateString());
+		const entry = weeklyData.find(
+			(d) => d.date === new Date(s.created_at).toDateString()
+		);
 		if (entry) entry.interviews++;
 	});
 
@@ -216,23 +243,30 @@ export async function GET(request: NextRequest) {
 	monthlyResumes.forEach((r) => {
 		const d = new Date(r.created_at);
 		const key = `${MONTH_NAMES[d.getMonth()]}|${d.getFullYear()}`;
-		if (monthlyMap.has(key)) monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + 1);
+		if (monthlyMap.has(key))
+			monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + 1);
 	});
-	const monthlyChartData = Array.from(monthlyMap.entries()).map(([key, count]) => ({
-		month: key.split("|")[0],
-		applications: count,
-	}));
+	const monthlyChartData = Array.from(monthlyMap.entries()).map(
+		([key, count]) => ({
+			month: key.split("|")[0],
+			applications: count,
+		})
+	);
 	const currentMonthTotal = monthlyChartData.at(-1)?.applications ?? 0;
 	const prevMonthTotal = monthlyChartData.at(-2)?.applications ?? 0;
 
 	// ── Build department progress ───────────────────────────────────────────
 
-	const inactiveMap = new Map(inactiveJobsByIndustry.map((g) => [g.industry, g._count.id]));
+	const inactiveMap = new Map(
+		inactiveJobsByIndustry.map((g) => [g.industry, g._count.id])
+	);
 	const departmentProgress = activeJobsByIndustry.map((g) => {
 		const active = g._count.id;
 		const filled = inactiveMap.get(g.industry) ?? 0;
 		return {
-			department: g.industry.charAt(0).toUpperCase() + g.industry.slice(1).replace(/_/g, " "),
+			department:
+				g.industry.charAt(0).toUpperCase() +
+				g.industry.slice(1).replace(/_/g, " "),
 			currentHired: filled,
 			targetHires: active + filled,
 		};
@@ -262,12 +296,16 @@ export async function GET(request: NextRequest) {
 			timestamp: s.created_at.toISOString(),
 		})),
 	]
-		.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+		.sort(
+			(a, b) =>
+				new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+		)
 		.slice(0, 10);
 
 	// ── Compose response ────────────────────────────────────────────────────
 
-	const hiringSuccessRate = totalInterviews > 0 ? completedInterviews / totalInterviews : 0;
+	const hiringSuccessRate =
+		totalInterviews > 0 ? completedInterviews / totalInterviews : 0;
 
 	return NextResponse.json({
 		data: {
