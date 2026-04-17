@@ -57,7 +57,6 @@ type VoucherForm = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PLAN_OPTIONS = ["Basic Plan", "Pro Plan", "Enterprise Plan"];
 
 const EMPTY_FORM: VoucherForm = {
 	code: "",
@@ -251,11 +250,13 @@ const VoucherModal = ({
 	onClose,
 	onSave,
 	saving,
+	planOptions,
 }: {
 	initial: VoucherForm & { id?: number };
 	onClose: () => void;
 	onSave: (form: VoucherForm & { id?: number }) => void;
 	saving: boolean;
+	planOptions: { name: string; display_name: string }[];
 }) => {
 	const [form, setForm] = useState<VoucherForm & { id?: number }>(initial);
 	const isEdit = Boolean(initial.id);
@@ -399,26 +400,29 @@ const VoucherModal = ({
 							Applicable Plans
 						</label>
 						<div className="space-y-2">
-							{PLAN_OPTIONS.map((plan) => (
-								<label key={plan} className="flex items-center gap-2.5 cursor-pointer">
+							{planOptions.length === 0 && (
+								<p className="text-[12px] text-slate-400 italic">No plans found</p>
+							)}
+							{planOptions.map((plan) => (
+								<label key={plan.name} className="flex items-center gap-2.5 cursor-pointer">
 									<div
-										onClick={() => togglePlan(plan)}
+										onClick={() => togglePlan(plan.name)}
 										className={clsx(
 											"flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors cursor-pointer",
-											form.plans.includes(plan)
+											form.plans.includes(plan.name)
 												? "border-[#005ca9] bg-[#005ca9]"
 												: "border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800"
 										)}
 									>
-										{form.plans.includes(plan) && (
-											<Check className="h-2.5 w-2.5 text-white stroke-[3]" />
+										{form.plans.includes(plan.name) && (
+											<Check className="h-2.5 w-2.5 text-white stroke-3" />
 										)}
 									</div>
 									<span
 										className="text-[13px] text-slate-600 dark:text-slate-400 cursor-pointer"
-										onClick={() => togglePlan(plan)}
+										onClick={() => togglePlan(plan.name)}
 									>
-										{plan}
+										{plan.display_name}
 									</span>
 								</label>
 							))}
@@ -503,6 +507,24 @@ const VouchersPage = () => {
 	const [saving, setSaving] = useState(false);
 	const [toggling, setToggling] = useState<number | null>(null);
 	const [copied, setCopied] = useState<number | null>(null);
+	const [planOptions, setPlanOptions] = useState<{ name: string; display_name: string }[]>([]);
+
+	// ── Load subscription plans ────────────────────────────────────────────────
+
+	useEffect(() => {
+		apiClient
+			.get("/api/subscriptions/plans")
+			.then((res) => {
+				const data = res.data?.data?.plans ?? [];
+				setPlanOptions(
+					data.map((p: { name: string; display_name: string }) => ({
+						name: p.name,
+						display_name: p.display_name,
+					}))
+				);
+			})
+			.catch(() => {/* keep empty — checkboxes just won't show */});
+	}, []);
 
 	// ── Load data ──────────────────────────────────────────────────────────────
 
@@ -708,7 +730,7 @@ const VouchersPage = () => {
 				</div>
 
 				<div className="overflow-x-auto">
-					<table className="w-full min-w-[860px]">
+					<table className="w-full min-w-215">
 						<thead>
 							<tr className="border-b border-slate-100 dark:border-slate-800">
 								{["CODE", "DISCOUNT", "TYPE", "USAGE", "EXPIRES", "STATUS", "ACTIONS"].map(
@@ -836,6 +858,7 @@ const VouchersPage = () => {
 					onClose={() => setModalForm(null)}
 					onSave={handleSave}
 					saving={saving}
+					planOptions={planOptions}
 				/>
 			)}
 
